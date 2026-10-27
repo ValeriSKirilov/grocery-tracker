@@ -1,0 +1,17 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+/data/
+/backend/data/
+*.csv
+*.zip
+
+!backend/etl/sample_data/*.csv
