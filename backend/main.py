@@ -2,12 +2,13 @@ from fastapi import FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
-from .config import settings
-from .database import engine
-from . import models
-from . import routes
+from config import settings
+from database import engine
+import models
+import routes
 
-models.Base.metadata.create_all(bind=engine)
+# TODO UNCOMMENT WHEN TABLES ARE IMPLEMENTED
+# models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Grocery Price Tracker API", version="1.0.0")
 
@@ -28,8 +29,9 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={"message": "Internal server error"}
     )
 
-app.include_router(routes.router)
+# TODO UNCOMMENT WHEN ROUTERS ARE IMPLEMENTED
+# app.include_router(routes.router)
 
-@app.get("/api/v1/health")
+@app.get("/")
 def health_check():
     return {"status": "ok", "message": "API is running"}

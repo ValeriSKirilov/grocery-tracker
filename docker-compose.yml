@@ -1,0 +1,22 @@
+services:
+  api:
+    build: ./backend
+    container_name: grocery_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/grocery-tracker-app
+    ports:
+      - "8000:8000"
+
+  web:
+    image: nginx:alpine
+    container_name: grocery_web
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
