@@ -1,3 +1,7 @@
+from datetime import date as DateType
+from decimal import Decimal
+
+from database import Base
 from sqlalchemy import (
     Date,
     ForeignKey,
@@ -7,46 +11,24 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
-from datetime import date as DateType
-from decimal import Decimal
-
-from database import Base
 
 
 class Settlement(Base):
     __tablename__ = "settlements"
 
-    ekatte_code: Mapped[str] = mapped_column(
-        String,
-        primary_key=True,
-        index=True
-    )
+    ekatte_code: Mapped[str] = mapped_column(String, primary_key=True, index=True)
 
-    name: Mapped[str] = mapped_column(
-        String,
-        nullable=False
-    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class Category(Base):
     __tablename__ = "categories"
 
-    id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        index=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    name: Mapped[str] = mapped_column(
-        String,
-        nullable=False
-    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
 
-    group_name: Mapped[str | None] = mapped_column(
-        String,
-        nullable=True
-    )
-
+    group_name: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class Product(Base):
@@ -54,39 +36,21 @@ class Product(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "chain_name",
-            "retailer_code",
-            name="uq_products_chain_retailer"
+            "chain_name", "retailer_code", name="uq_products_chain_retailer"
         ),
     )
 
-    id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        index=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    chain_name: Mapped[str] = mapped_column(
-        String,
-        nullable=False
-    )
+    chain_name: Mapped[str] = mapped_column(String, nullable=False)
 
-    retailer_code: Mapped[str] = mapped_column(
-        String,
-        nullable=False
-    )
+    retailer_code: Mapped[str] = mapped_column(String, nullable=False)
 
-    name: Mapped[str] = mapped_column(
-        String,
-        nullable=False
-    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
 
     category_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("categories.id"),
-        nullable=False
+        Integer, ForeignKey("categories.id"), nullable=False
     )
-
 
 
 class PriceRecord(Base):
@@ -97,36 +61,24 @@ class PriceRecord(Base):
             "product_id",
             "ekatte_code",
             "date",
-            name="uq_price_records_product_city_date"
+            name="uq_price_records_product_city_date",
         ),
     )
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     product_id: Mapped[int] = mapped_column(
-        ForeignKey("products.id"), nullable=False
+        Integer, ForeignKey("products.id"), nullable=False
     )
 
     ekatte_code: Mapped[str] = mapped_column(
-        ForeignKey("settlements.ekatte_code"),
-        nullable=False
+        Integer, ForeignKey("settlements.ekatte_code"), nullable=False
     )
 
-    date: Mapped[DateType] = mapped_column(
-        Date, nullable=False, index=True
-    )
+    date: Mapped[DateType] = mapped_column(Date, nullable=False, index=True)
 
-    regular_price: Mapped[Decimal] = mapped_column(
-        Numeric(10, 2), nullable=False
-    )
+    regular_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
 
-    promo_price: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
+    promo_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
-    effective_price: Mapped[Decimal] = mapped_column(
-        Numeric(10, 2), nullable=False
-    )
-
+    effective_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
