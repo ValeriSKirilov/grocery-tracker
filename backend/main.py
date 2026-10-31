@@ -1,14 +1,11 @@
+import models
+from config import settings
+from database import engine
 from fastapi import FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
-from config import settings
-from database import engine
-import models
-import routes
-
-# TODO UNCOMMENT WHEN TABLES ARE IMPLEMENTED
-# models.Base.metadata.create_all(bind=engine)
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Grocery Price Tracker API", version="1.0.0")
 
@@ -20,17 +17,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     print(f"CRITICAL SYSTEM FAILURE: {exc}")
 
-    return JSONResponse(
-        status_code=500,
-        content={"message": "Internal server error"}
-    )
+    return JSONResponse(status_code=500, content={"message": "Internal server error"})
+
 
 # TODO UNCOMMENT WHEN ROUTERS ARE IMPLEMENTED
 # app.include_router(routes.router)
+
 
 @app.get("/")
 def health_check():
