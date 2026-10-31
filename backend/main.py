@@ -7,8 +7,7 @@ from database import engine
 import models
 import routes
 
-# TODO UNCOMMENT WHEN TABLES ARE IMPLEMENTED
-# models.Base.metadata.create_all(bind=engine)
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Grocery Price Tracker API", version="1.0.0")
 
