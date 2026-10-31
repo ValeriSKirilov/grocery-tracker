@@ -1,6 +1,12 @@
-from sqlalchemy import String, Integer, Date, Numeric
+from sqlalchemy import (
+    Date,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, Integer, ForeignKey, UniqueConstraint
 from datetime import date as DateType
 from decimal import Decimal
 
