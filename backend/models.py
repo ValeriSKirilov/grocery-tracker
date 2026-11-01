@@ -72,7 +72,7 @@ class PriceRecord(Base):
     )
 
     ekatte_code: Mapped[str] = mapped_column(
-        Integer, ForeignKey("settlements.ekatte_code"), nullable=False
+        String, ForeignKey("settlements.ekatte_code"), nullable=False
     )
 
     date: Mapped[DateType] = mapped_column(Date, nullable=False, index=True)
