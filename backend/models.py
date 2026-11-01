@@ -60,8 +60,9 @@ class PriceRecord(Base):
         UniqueConstraint(
             "product_id",
             "ekatte_code",
+            "store_address",
             "date",
-            name="uq_price_records_product_city_date",
+            name="uq_price_records_product_city_store_date",
         ),
     )
 
@@ -75,6 +76,8 @@ class PriceRecord(Base):
         String, ForeignKey("settlements.ekatte_code"), nullable=False
     )
 
+    store_address: Mapped[str] = mapped_column(String, nullable=False)
+
     date: Mapped[DateType] = mapped_column(Date, nullable=False, index=True)
 
     regular_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -82,3 +85,4 @@ class PriceRecord(Base):
     promo_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
     effective_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
