@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang ="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Колко струва</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="js/app.js" defer></script>
+</head>
+<body>
+    <header class="topbar">
+        <div>
+            <h1>Колко струва</h1>
+            <p> Сравни цената на своята кошница</p>
+        </div>
+
+        <button
+            id="theme-toggle"
+            class="theme-toggle"
+            type="button"
+            aria-pressed="false"
+        >
+            <span id="theme-icon" aria-hidden="true">🌙</span>
+            <span id="theme-text">Dark Theme</span>
+        </button>
+    </header>
+
+    <main class="layout">
+        <section class="panel">
+            <h2>Моята кошница</h2>
+
+            <label for="city">Град</label>
+            <select id="city">
+                <option>София</option>
+            </select>
+
+            <ul id="basket-items">
+                <li>Прясно мляко 1 л — 1 бр.</li>
+            </ul>
+
+            <p>Общо: <strong>примерна цена</strong></p>
+            <button id="compare-button">Сравни цените</button>
+        </section>
+
+    <section class="panel">
+      <h2>Цени по вериги</h2>
+      <p id="results-message">
+        Резултатите от сравнението ще се появят тук.
+      </p>
+      <div id="store-results"></div>
+    </section>
+    </main>
+</body>
+</html>

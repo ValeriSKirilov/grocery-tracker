@@ -1,0 +1,129 @@
+:root {
+  color-scheme: light;
+  --page-bg: #f1f4f3;
+  --surface: #ffffff;
+  --text: #202522;
+  --muted: #647069;
+  --border: #d9e0dc;
+  --accent: #087f5b;
+  --accent-text: #ffffff;
+  --cheapest-bg: #effaf5;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page-bg: #111827;
+  --surface: #1f2937;
+  --text: #f3f4f6;
+  --muted: #b6c2cf;
+  --border: #374151;
+  --accent: #34d399;
+  --accent-text: #06291d;
+  --cheapest-bg: #123a30;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: Arial, sans-serif;
+  background: var(--page-bg);
+  color: var(--text);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.topbar h1,
+.topbar p {
+  margin: 0;
+}
+
+.topbar p {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+}
+
+.panel {
+  padding: 20px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+select {
+  padding: 8px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+#store-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.store-card {
+  padding: 16px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.store-card.cheapest {
+  border: 2px solid var(--accent);
+  background: var(--cheapest-bg);
+}
+
+@media (max-width: 700px) {
+  body {
+    padding: 16px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
