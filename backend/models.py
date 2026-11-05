@@ -60,8 +60,9 @@ class PriceRecord(Base):
         UniqueConstraint(
             "product_id",
             "ekatte_code",
+            "store_address",
             "date",
-            name="uq_price_records_product_city_date",
+            name="uq_price_records_product_city_store_date",
         ),
     )
 
@@ -72,8 +73,10 @@ class PriceRecord(Base):
     )
 
     ekatte_code: Mapped[str] = mapped_column(
-        Integer, ForeignKey("settlements.ekatte_code"), nullable=False
+        String, ForeignKey("settlements.ekatte_code"), nullable=False
     )
+
+    store_address: Mapped[str] = mapped_column(String, nullable=False)
 
     date: Mapped[DateType] = mapped_column(Date, nullable=False, index=True)
 
