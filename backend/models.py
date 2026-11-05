@@ -1,7 +1,7 @@
 from datetime import date as DateType
 from decimal import Decimal
 
-from database import Base
+from backend.database import Base
 from sqlalchemy import (
     Date,
     ForeignKey,
@@ -85,3 +85,4 @@ class PriceRecord(Base):
     promo_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
 
     effective_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+
