@@ -48,7 +48,7 @@ def _parse_price(value: Any) -> Decimal | None:
     if value is None:
         return None
 
-    value = str(value).strip()
+    value = str(value).strip().replace(",", ".")
 
     if not value:
         return None
@@ -72,7 +72,15 @@ def parse_and_clean_csv(
     """
 
     text = _read_csv_text(csv_file)
-    reader = csv.DictReader(io.StringIO(text, newline=""))
+    header = text.splitlines()[0] if text.splitlines() else ""
+
+    delimiter = ";" if header.count(";") > header.count(",") else ","
+
+    reader = csv.DictReader(
+        io.StringIO(text, newline=""),
+        delimiter=delimiter,
+        skipinitialspace=True,
+    )
 
     if not reader.fieldnames:
         raise ValueError("CSV file is empty or has no header row")
@@ -156,12 +164,27 @@ def parse_and_clean_csv(
         ):
             continue
 
-        settlement = normalized.get("Settlement_EKATTE", "")
+
+        settlement = str(normalized.get("Settlement_EKATTE", "")).strip()
+
+        if settlement:
+            settlement = settlement.zfill(5)
+        
         product_code = normalized.get("Retailer_Product_Code", "")
         category_id = normalized.get("Category_ID", "")
 
-        if not settlement or not product_code or not category_id:
+        if not settlement or not product_code:
             continue
+
+
+        try:
+            category_id = int(category_id)
+        except (ValueError, TypeError):
+            category_id = 102
+
+        if category_id not in range(1, 102):
+            category_id = 102
+
 
         effective_price = promo_price or regular_price
 
