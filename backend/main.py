@@ -1,4 +1,5 @@
 import models
+import routes
 from config import settings
 from database import engine
 from fastapi import FastAPI, Request
@@ -26,7 +27,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 # TODO UNCOMMENT WHEN ROUTERS ARE IMPLEMENTED
-# app.include_router(routes.router)
+app.include_router(routes.router)
 
 
 @app.get("/")
