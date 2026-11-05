@@ -241,7 +241,7 @@ def test_leading_zeroes_are_preserved():
 
     assert rows[0]["Settlement_EKATTE"] == "07079"
     assert rows[0]["Retailer_Product_Code"] == "000123"
-    assert rows[0]["Category_ID"] == "084"
+    assert rows[0]["Category_ID"] == 84
 
 
 @pytest.mark.parametrize(
@@ -249,7 +249,6 @@ def test_leading_zeroes_are_preserved():
     [
         ("settlement", ""),
         ("code", ""),
-        ("category", ""),
     ],
 )
 def test_missing_required_identifiers_are_skipped(field, value):
@@ -274,6 +273,19 @@ def test_missing_required_identifiers_are_skipped(field, value):
 
     assert rows == []
 
+
+def test_missing_category_defaults_to_other():
+    csv_data = BULGARIAN_HEADER
+    csv_data += make_row(
+        settlement="07079",
+        code="000123",
+        category="",
+    )
+
+    rows = parse_csv(csv_data)
+
+    assert len(rows) == 1
+    assert rows[0]["Category_ID"] == 102
 
 # --------------------------------------------------
 # 4. Тестове за текст и encoding
