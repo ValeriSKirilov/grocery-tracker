@@ -1,22 +1,17 @@
 import io
 import logging
-import re
 import sys
 import zipfile
-
 from collections import Counter
 from datetime import date, timedelta
 from time import perf_counter
 
 import httpx
+from database import engine
+from etl.parser import parse_and_clean_csv
+from models import Category, PriceRecord, Product, Settlement
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-
-from backend.database import engine
-from backend.etl.parser import parse_and_clean_csv
-from backend.models import Category, PriceRecord, Product, Settlement
-
-
 
 BASE_URL = "https://kolkostruva.bg/opendata_files"
 BATCH_SIZE = 1000
@@ -27,6 +22,7 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
 
 def fetch_daily_zip(target_date: date) -> dict[str, bytes]:
     """
@@ -50,9 +46,7 @@ def fetch_daily_zip(target_date: date) -> dict[str, bytes]:
     csv_files = {}
 
     with zipfile.ZipFile(zip_buffer, "r") as archive:
-
         for filename in archive.namelist():
-
             if filename.endswith("/"):
                 continue
 
@@ -64,9 +58,7 @@ def fetch_daily_zip(target_date: date) -> dict[str, bytes]:
             csv_files[filename] = csv_content
 
     if not csv_files:
-        raise ValueError(
-            f"No CSV files found in archive for {date_string}"
-        )
+        raise ValueError(f"No CSV files found in archive for {date_string}")
 
     return csv_files
 
@@ -79,7 +71,6 @@ def get_chain_name(filename: str) -> str:
     name = name.rsplit(".", 1)[0]
 
     name = name.split("_", 1)[0]
-    
 
     return name.strip()
 
@@ -87,7 +78,7 @@ def get_chain_name(filename: str) -> str:
 def chunks(items: list, size: int = BATCH_SIZE):
     """Split a list into smaller batches."""
     for start in range(0, len(items), size):
-        yield items[start:start + size]
+        yield items[start : start + size]
 
 
 def sync_daily_data(target_date: date) -> None:
@@ -116,18 +107,13 @@ def sync_daily_data(target_date: date) -> None:
     total_prices_inserted = 0
 
     with engine.begin() as connection:
-
         settlements = dict(
-            connection.execute(
-                select(Settlement.ekatte_code, Settlement.name)
-            ).all()
+            connection.execute(select(Settlement.ekatte_code, Settlement.name)).all()
         )
 
         categories = {
             category_id
-            for (category_id,) in connection.execute(
-                select(Category.id)
-            ).all()
+            for (category_id,) in connection.execute(select(Category.id)).all()
         }
 
         if not settlements:
@@ -138,8 +124,7 @@ def sync_daily_data(target_date: date) -> None:
 
         if not categories:
             raise RuntimeError(
-                "The categories table is empty. "
-                "Load the category reference data first."
+                "The categories table is empty. Load the category reference data first."
             )
 
         logger.info(
@@ -217,8 +202,7 @@ def sync_daily_data(target_date: date) -> None:
 
             if missing_categories:
                 raise ValueError(
-                    f"Missing categories in {filename}: "
-                    f"{list(missing_categories)[:10]}"
+                    f"Missing categories in {filename}: {list(missing_categories)[:10]}"
                 )
 
             product_data = {}
@@ -279,15 +263,17 @@ def sync_daily_data(target_date: date) -> None:
                         f"product {retailer_code}"
                     )
 
-                price_values.append({
-                    "product_id": product_id,
-                    "ekatte_code": row["Settlement_EKATTE"],
-                    "store_address": row["Store_Address"],
-                    "date": target_date,
-                    "regular_price": row["Regular_Price"],
-                    "promo_price": row["Promo_Price"],
-                    "effective_price": row["effective_price"],
-                })
+                price_values.append(
+                    {
+                        "product_id": product_id,
+                        "ekatte_code": row["Settlement_EKATTE"],
+                        "store_address": row["Store_Address"],
+                        "date": target_date,
+                        "regular_price": row["Regular_Price"],
+                        "promo_price": row["Promo_Price"],
+                        "effective_price": row["effective_price"],
+                    }
+                )
 
             for batch in chunks(price_values):
                 statement = (
@@ -317,12 +303,12 @@ def sync_daily_data(target_date: date) -> None:
     logger.info("CSV files processed: %s", len(csv_files))
     logger.info("Total parsed rows: %s", total_parsed)
     logger.info("Rows with valid settlements: %s", total_valid)
-    logger.info("Rows skipped due to unknown settlements: %s",
-                total_skipped_settlement_rows)
+    logger.info(
+        "Rows skipped due to unknown settlements: %s", total_skipped_settlement_rows
+    )
     logger.info("New products inserted: %s", total_products_inserted)
     logger.info("New price records inserted: %s", total_prices_inserted)
     logger.info("Total execution time: %.2f seconds", total_time)
-
 
 
 if __name__ == "__main__":

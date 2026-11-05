@@ -1,4 +1,3 @@
-
 import io
 from datetime import date
 from decimal import Decimal
@@ -6,7 +5,6 @@ from decimal import Decimal
 import pytest
 
 from backend.etl.parser import parse_and_clean_csv
-
 
 # --------------------------------------------------
 # Общи тестови данни и помощни функции
@@ -56,11 +54,11 @@ def make_row(
 # 1. Основни тестове
 # --------------------------------------------------
 def test_parse_realistic_csv():
-    csv_data = '''"Населено място","Търговски обект","Наименование на продукта","Код на продукта","Категория","Цена на дребно","Цена в промоция"
+    csv_data = """"Населено място","Търговски обект","Наименование на продукта","Код на продукта","Категория","Цена на дребно","Цена в промоция"
 "07079","DS Home - Бургас","МОКРИ КЪРПИЧКИ АЛОЕ ВЕРА","76060","84","0.8436",""
 "68134","Магазин София","ТЕСТОВ ПРОДУКТ","000123","84","10.50","7.99"
 "68134","Магазин София","НЕВАЛИДЕН ПРОДУКТ","000124","84","0",""
-'''
+"""
 
     rows = parse_and_clean_csv(
         io.BytesIO(csv_data.encode("utf-8")),
@@ -145,6 +143,7 @@ def test_header_only_csv_returns_empty_list():
 # 2. Тестове за цени
 # --------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "regular_price",
     [
@@ -227,6 +226,7 @@ def test_malformed_promo_price_is_skipped():
 # 3. Тестове за идентификатори
 # --------------------------------------------------
 
+
 def test_leading_zeroes_are_preserved():
     """Кодовете трябва да останат текст, за да не губят нулите отпред."""
 
@@ -287,9 +287,11 @@ def test_missing_category_defaults_to_other():
     assert len(rows) == 1
     assert rows[0]["Category_ID"] == 102
 
+
 # --------------------------------------------------
 # 4. Тестове за текст и encoding
 # --------------------------------------------------
+
 
 def test_bulgarian_text_is_preserved():
     """Проверява дали кирилицата се прочита правилно."""
@@ -341,14 +343,14 @@ def test_empty_lines_are_ignored():
 # 5. Тестове за структурата на CSV файла
 # --------------------------------------------------
 
+
 def test_english_column_names_are_supported():
     """Проверява поддръжката на английски имена на колоните."""
 
     csv_data = ENGLISH_HEADER
 
     csv_data += (
-        '"07079","DS Home - Burgas",'
-        '"TEST PRODUCT","000123","84","10.50","7.99"\n'
+        '"07079","DS Home - Burgas","TEST PRODUCT","000123","84","10.50","7.99"\n'
     )
 
     rows = parse_csv(csv_data)
@@ -361,10 +363,7 @@ def test_english_column_names_are_supported():
 def test_missing_columns_raise_value_error():
     """Файл без задължителните колони трябва да предизвика грешка."""
 
-    csv_data = (
-        '"Населено място","Търговски обект"\n'
-        '"07079","DS Home - Бургас"\n'
-    )
+    csv_data = '"Населено място","Търговски обект"\n"07079","DS Home - Бургас"\n'
 
     with pytest.raises(ValueError):
         parse_csv(csv_data)
@@ -373,6 +372,7 @@ def test_missing_columns_raise_value_error():
 # --------------------------------------------------
 # 6. Тестове за допълнителните данни
 # --------------------------------------------------
+
 
 def test_chain_name_is_added_to_every_record():
     """Проверява дали името на веригата се добавя правилно."""
@@ -415,4 +415,3 @@ def test_multiple_valid_rows_are_returned():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

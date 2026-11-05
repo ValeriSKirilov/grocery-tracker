@@ -85,36 +85,24 @@ def parse_and_clean_csv(
     if not reader.fieldnames:
         raise ValueError("CSV file is empty or has no header row")
 
-    reader.fieldnames = [
-        name.strip() if name else name
-        for name in reader.fieldnames
-    ]
+    reader.fieldnames = [name.strip() if name else name for name in reader.fieldnames]
 
     available_columns = set(reader.fieldnames)
-    missing_columns = [
-        name
-        for name in COLUMN_MAP
-        if name not in available_columns
-    ]
+    missing_columns = [name for name in COLUMN_MAP if name not in available_columns]
 
     if missing_columns:
         missing_english = [
-            name for name in REQUIRED_COLUMNS
-            if name not in available_columns
+            name for name in REQUIRED_COLUMNS if name not in available_columns
         ]
         if missing_english:
             raise ValueError(
-                "CSV is missing expected columns. "
-                f"Found: {reader.fieldnames}"
+                f"CSV is missing expected columns. Found: {reader.fieldnames}"
             )
 
     rows = []
 
     for row in reader:
-        if not row or all(
-            value is None or not value.strip()
-            for value in row.values()
-        ):
+        if not row or all(value is None or not value.strip() for value in row.values()):
             continue
 
         cleaned = {
@@ -132,24 +120,13 @@ def parse_and_clean_csv(
             }
         else:
             normalized = {
-                key: value
-                for key, value in cleaned.items()
-                if key in REQUIRED_COLUMNS
+                key: value for key, value in cleaned.items() if key in REQUIRED_COLUMNS
             }
 
-        regular_price = _parse_price(
-            normalized.get("Regular_Price")
-        )
+        regular_price = _parse_price(normalized.get("Regular_Price"))
 
         if regular_price is None or regular_price <= 0:
             continue
-
-        promo_price = _parse_price(
-            normalized.get("Promo_Price")
-        )
-
-        if promo_price == 0:
-            promo_price = None
 
         raw_promo = normalized.get("Promo_Price")
         promo_price = _parse_price(raw_promo)
@@ -157,25 +134,26 @@ def parse_and_clean_csv(
         if promo_price == 0:
             promo_price = None
 
+        if promo_price and promo_price >= regular_price:
+            promo_price = None
+
         if (
             raw_promo is not None
             and str(raw_promo).strip()
             and _parse_price(raw_promo) is None
         ):
-            continue
-
+            promo_price = None
 
         settlement = str(normalized.get("Settlement_EKATTE", "")).strip()
 
         if settlement:
             settlement = settlement.zfill(5)
-        
+
         product_code = normalized.get("Retailer_Product_Code", "")
         category_id = normalized.get("Category_ID", "")
 
         if not settlement or not product_code:
             continue
-
 
         try:
             category_id = int(category_id)
@@ -184,7 +162,6 @@ def parse_and_clean_csv(
 
         if category_id not in range(1, 102):
             category_id = 102
-
 
         effective_price = promo_price or regular_price
 
