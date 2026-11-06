@@ -28,4 +28,4 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           FRONTEND_URL: "http://localhost:3000"
-        run: python -m backend.etl.downloader
+        run: python -m etl.downloader

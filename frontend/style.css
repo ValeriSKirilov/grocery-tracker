@@ -2667,7 +2667,7 @@ kbd {
 /* ───────────── Каталог на всички продукти ───────────── */
 .catalog-controls {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(190px, 1fr) minmax(180px, 0.8fr);
+  grid-template-columns: minmax(220px, 1.4fr) minmax(190px, 1fr);
   gap: 10px;
   margin: 18px 0;
 }
@@ -2706,6 +2706,25 @@ kbd {
   font-size: 0.82rem;
 }
 
+.catalog-collapse {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.catalog-store-sort {
+  display: grid;
+  gap: 4px;
+  min-width: 185px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.catalog-store-sort select {
+  padding: 8px 30px 8px 10px;
+  font-size: 0.8rem;
+}
+
 .catalog-best {
   display: grid;
   gap: 1px;
@@ -2732,41 +2751,72 @@ kbd {
 
 .catalog-stores {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
-  gap: 1px;
-  background: var(--line);
+  padding: 0 18px;
+  background: var(--surface);
+}
+
+.catalog-stores[hidden] {
+  display: none;
+}
+
+.catalog-stores-toggle {
+  justify-self: center;
+  margin: 10px 0 14px;
 }
 
 .catalog-store {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
   min-width: 0;
-  padding: 14px;
+  padding: 14px 0;
   background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.catalog-store:last-child {
+  border-bottom: 0;
+}
+
+.catalog-store-name {
+  min-width: 0;
 }
 
 .catalog-store h4 {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 10px;
+  margin: 4px 0 0;
   font-size: 0.9rem;
+}
+
+.catalog-store-offers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  min-width: 0;
 }
 
 .catalog-offer {
   display: grid;
   gap: 7px;
-  padding: 11px;
+  align-content: start;
+  padding: 10px 11px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--surface-2);
 }
 
-.catalog-offer + .catalog-offer {
-  margin-top: 8px;
-}
-
 .catalog-offer.is-cheapest {
   border-color: var(--accent-line);
   background: var(--accent-soft);
+}
+
+.catalog-offer-toggle {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: 2px;
 }
 
 .catalog-offer-name {
@@ -2827,7 +2877,16 @@ kbd {
     width: 100%;
   }
 
-  .catalog-stores {
+  .catalog-store-sort {
+    width: 100%;
+  }
+
+  .catalog-store {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .catalog-store-offers {
     grid-template-columns: 1fr;
   }
 }

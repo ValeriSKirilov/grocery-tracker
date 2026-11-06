@@ -59,15 +59,23 @@
     : { matches: false };
   const catalog = {
     rows: [],
+    categoryIndex: [],
     loading: false,
     loaded: false,
     error: false,
     query: "",
     group: "all",
-    sort: "price",
     shown: 12,
     requestId: 0,
-  };  let booted = false;
+    productSearchText: new WeakMap(),
+    expandedStores: new Set(),
+    expandedChainGroups: new Set(),
+    collapsedGroups: new Set(),
+    storeSortByCategory: new Map(),
+  };
+  const CATALOG_DEFAULT_OFFERS = 3;
+  const CATALOG_DEFAULT_STORES = 5;
+  let booted = false;
 
   /* ───────────────────────── icons ───────────────────────── */
   const ICONS = {
@@ -580,6 +588,7 @@
     rt.deals.shown = 12;
     catalog.loaded = false;
     catalog.rows = [];
+    catalog.categoryIndex = [];
     catalog.shown = 12;
     rt.prevBest = null;
     $("#city-input").value = cityName();
@@ -1237,6 +1246,7 @@
         return;
       }
       catalog.rows = rows;
+      catalog.categoryIndex = buildCatalogIndex(rows);
       catalog.loaded = true;
     } catch (err) {
       if (requestId !== catalog.requestId) return;
@@ -1248,6 +1258,37 @@
     renderCatalog();
   }
 
+  function buildCatalogIndex(rows) {
+    catalog.productSearchText = new WeakMap();
+    const byCategory = new Map();
+    rows.forEach((product) => {
+      const id = Number(product.category_id);
+      if (!Number.isFinite(id)) return;
+      catalog.productSearchText.set(product, norm(product.name));
+      if (!byCategory.has(id)) {
+        byCategory.set(id, {
+          id,
+          name: catName(id),
+          nameSearchText: norm(catName(id)),
+          rows: [],
+          latestDate: "",
+        });
+      }
+      const category = byCategory.get(id);
+      category.rows.push(product);
+      const date = String(product.date || "");
+      if (date > category.latestDate) category.latestDate = date;
+    });
+
+    return Array.from(byCategory.values()).map((category) => {
+      category.rows.sort(
+        (a, b) => Number(a.effective_price) - Number(b.effective_price),
+      );
+      category.lowest = category.rows[0] || null;
+      return category;
+    });
+  }
+
   function renderCatalog() {
     const count = $("#catalog-count");
     const grid = $("#catalog-grid");
@@ -1255,7 +1296,7 @@
     const categorySelect = $("#catalog-category");
 
     const availableGroups = Array.from(
-      new Set(catalog.rows.map((p) => catGroup(p.category_id))),
+      new Set(catalog.categoryIndex.map((category) => catGroup(category.id))),
     ).sort((a, b) => a.localeCompare(b, "bg"));
     categorySelect.innerHTML =
       '<option value="all">Всички продуктови групи</option>' +
@@ -1286,56 +1327,52 @@
     }
 
     const query = norm(catalog.query);
-    const baseRows = catalog.rows.filter(
-      (p) =>
-        catalog.group === "all" ||
-        catGroup(p.category_id) === catalog.group,
+    const eligibleCategories = catalog.categoryIndex.filter(
+      (category) =>
+        catalog.group === "all" || catGroup(category.id) === catalog.group,
     );
-    const matchingIds = new Set(
-      baseRows
-        .filter(
-          (p) =>
-            !query ||
-            norm(p.name).includes(query) ||
-            norm(catName(p.category_id)).includes(query) ||
-            norm(catGroup(p.category_id)).includes(query),
+    const categoryNameMatches = query
+      ? eligibleCategories.filter((category) =>
+          category.nameSearchText.includes(query),
         )
-        .map((p) => Number(p.category_id)),
+      : [];
+    const groups = !query
+      ? eligibleCategories
+      : categoryNameMatches.length
+        ? categoryNameMatches
+        : eligibleCategories
+            .map((category) => {
+              const matchingRows = category.rows.filter((product) =>
+                catalog.productSearchText.get(product)?.includes(query),
+              );
+              if (!matchingRows.length) return null;
+              const latestDate = matchingRows.reduce((latest, product) => {
+                const date = String(product.date || "");
+                return date > latest ? date : latest;
+              }, "");
+              return {
+                ...category,
+                rows: matchingRows,
+                lowest: matchingRows[0] || null,
+                latestDate,
+              };
+            })
+            .filter(Boolean);
+    groups.sort(
+      (a, b) =>
+        Number(a.lowest && a.lowest.effective_price) -
+        Number(b.lowest && b.lowest.effective_price),
     );
-    const rows = baseRows.filter((p) =>
-      matchingIds.has(Number(p.category_id)),
-    );
-    const grouped = new Map();
-    rows.forEach((p) => {
-      const id = Number(p.category_id);
-      if (!grouped.has(id)) {
-        grouped.set(id, { id, name: catName(id), rows: [] });
-      }
-      grouped.get(id).rows.push(p);
-    });
-    const groups = Array.from(grouped.values()).map((group) => {
-      group.rows.sort(
-        (a, b) => Number(a.effective_price) - Number(b.effective_price),
-      );
-      group.lowest = group.rows[0] || null;
-      return group;
-    });
-    if (catalog.sort === "name") {
-      groups.sort((a, b) => a.name.localeCompare(b.name, "bg"));
-    } else {
-      groups.sort(
-        (a, b) =>
-          Number(a.lowest && a.lowest.effective_price) -
-          Number(b.lowest && b.lowest.effective_price),
-      );
-    }
 
-    const itemCount = rows.length;
-    const latestDate = rows
-      .map((p) => String(p.date || ""))
-      .filter(Boolean)
-      .sort()
-      .slice(-1)[0];
+    const itemCount = groups.reduce(
+      (total, category) => total + category.rows.length,
+      0,
+    );
+    const latestDate = groups.reduce(
+      (latest, category) =>
+        category.latestDate > latest ? category.latestDate : latest,
+      "",
+    );
     count.textContent =
       groups.length +
       (groups.length === 1 ? " продуктова група" : " продуктови групи") +
@@ -1353,75 +1390,122 @@
       return;
     }
 
-    const chains = Array.from(
-      new Set([
-        ...rt.meta.chains,
-        ...rows.map((p) => p.chain_name).filter(Boolean),
-      ]),
-    );
     const visibleGroups = groups.slice(0, catalog.shown);
     grid.innerHTML = visibleGroups
       .map((group) => {
         const low = group.lowest;
-        const stores = chains
-          .map((chain) => {
-            const offers = group.rows.filter((p) => p.chain_name === chain);
-            const offersHtml = offers.length
+        // Only render chains with offers for this product category.
+        const storeSort = catalog.storeSortByCategory.get(group.id) || "price-asc";
+        const storesForGroup = Array.from(
+          group.rows.reduce((byChain, product) => {
+            if (!byChain.has(product.chain_name)) byChain.set(product.chain_name, []);
+            byChain.get(product.chain_name).push(product);
+            return byChain;
+          }, new Map()),
+        ).map(([chain, offers]) => {
+          offers.sort(
+            (a, b) => Number(a.effective_price) - Number(b.effective_price),
+          );
+          return { chain, offers, cheapest: Number(offers[0].effective_price) };
+        });
+        storesForGroup.sort((a, b) => {
+          if (storeSort === "name") return a.chain.localeCompare(b.chain, "bg");
+          const priceOrder = a.cheapest - b.cheapest;
+          const orderedPrice = storeSort === "price-desc" ? -priceOrder : priceOrder;
+          return orderedPrice || a.chain.localeCompare(b.chain, "bg");
+        });
+        const storesExpanded = catalog.expandedChainGroups.has(group.id);
+        const visibleStores = storesExpanded
+          ? storesForGroup
+          : storesForGroup.slice(0, CATALOG_DEFAULT_STORES);
+        const stores = visibleStores
+          .map(({ chain, offers }) => {
+            const expansionKey = `${group.id}:${chain}`;
+            const expanded = catalog.expandedStores.has(expansionKey);
+            const visibleOffers = expanded
               ? offers
-                  .map((p) => {
-                    const regular = Number(p.regular_price) || 0;
-                    const current =
-                      p.effective_price == null
-                        ? regular
-                        : Number(p.effective_price);
-                    const promo =
-                      p.promo_price != null &&
-                      Number(p.promo_price) < regular;
-                    const cheapest =
-                      Math.abs(current - Number(low.effective_price)) < 0.000001;
-                    return (
-                      '<article class="catalog-offer' +
-                      (cheapest ? " is-cheapest" : "") +
-                      '">' +
-                      '<div class="catalog-offer-name">' +
-                      esc(p.name) +
-                      "</div>" +
-                      '<div class="catalog-offer-price">' +
-                      (promo ? "<s>" + eur(regular) + "</s>" : "") +
-                      '<strong class="' +
-                      (promo ? "is-promo" : "") +
-                      '">' +
-                      eur(current) +
-                      "</strong>" +
-                      (promo ? '<span class="catalog-promo">Промоция</span>' : "") +
-                      "</div>" +
-                      '<button type="button" class="btn btn-ghost btn-sm" data-hist="' +
-                      esc(p.product_id) +
-                      '" data-chain="' +
-                      esc(p.chain_name) +
-                      '" data-cat="' +
-                      Number(p.category_id) +
-                      '" data-name="' +
-                      esc(p.name) +
-                      '">История</button>' +
-                      "</article>"
-                    );
-                  })
-                  .join("")
-              : '<p class="catalog-no-data">Няма данни</p>';
+              : offers.slice(0, CATALOG_DEFAULT_OFFERS);
+            const offersHtml = visibleOffers
+              .map((p) => {
+                const regular = Number(p.regular_price) || 0;
+                const current =
+                  p.effective_price == null
+                    ? regular
+                    : Number(p.effective_price);
+                const promo =
+                  p.promo_price != null && Number(p.promo_price) < regular;
+                const cheapest =
+                  Math.abs(current - Number(low.effective_price)) < 0.000001;
+                return (
+                  '<article class="catalog-offer' +
+                  (cheapest ? " is-cheapest" : "") +
+                  '">' +
+                  '<div class="catalog-offer-name">' +
+                  esc(p.name) +
+                  "</div>" +
+                  '<div class="catalog-offer-price">' +
+                  (promo ? "<s>" + eur(regular) + "</s>" : "") +
+                  '<strong class="' +
+                  (promo ? "is-promo" : "") +
+                  '">' +
+                  eur(current) +
+                  "</strong>" +
+                  (promo ? '<span class="catalog-promo">Промоция</span>' : "") +
+                  "</div>" +
+                  '<button type="button" class="btn btn-ghost btn-sm" data-hist="' +
+                  esc(p.product_id) +
+                  '" data-chain="' +
+                  esc(p.chain_name) +
+                  '" data-cat="' +
+                  Number(p.category_id) +
+                  '" data-name="' +
+                  esc(p.name) +
+                  '">История</button>' +
+                  "</article>"
+                );
+              })
+              .join("");
+            const hiddenCount = offers.length - visibleOffers.length;
+            const moreButton =
+              hiddenCount > 0 || expanded
+                ? '<button type="button" class="btn btn-ghost btn-sm catalog-offer-toggle" data-catalog-offers-toggle="' +
+                  esc(expansionKey) +
+                  '" aria-expanded="' +
+                  String(expanded) +
+                  '">' +
+                  (expanded ? "Покажи по-малко" : "Покажи още (" + hiddenCount + ")") +
+                  "</button>"
+                : "";
             return (
               '<section class="catalog-store">' +
-              "<h4>" +
+              '<div class="catalog-store-name"><h4>' +
               avatar(chain) +
               " " +
               esc(chain) +
-              "</h4>" +
+              "</h4></div>" +
+              '<div class="catalog-store-offers">' +
               offersHtml +
+              moreButton +
+              "</div>" +
               "</section>"
             );
           })
           .join("");
+        const hiddenStoreCount = storesForGroup.length - visibleStores.length;
+        const moreStoresButton =
+          hiddenStoreCount > 0 || storesExpanded
+            ? '<button type="button" class="btn btn-ghost btn-sm catalog-stores-toggle" data-catalog-stores-toggle="' +
+              group.id +
+              '" aria-expanded="' +
+              String(storesExpanded) +
+              '">' +
+              (storesExpanded
+                ? "Покажи по-малко магазини"
+                : "Покажи още магазини (" + hiddenStoreCount + ")") +
+              "</button>"
+            : "";
         const chainCount = new Set(group.rows.map((p) => p.chain_name)).size;
+        const collapsed = catalog.collapsedGroups.has(group.id);
         return (
           '<article class="catalog-group">' +
           '<div class="catalog-group-head">' +
@@ -1434,19 +1518,49 @@
           chainCount +
           (chainCount === 1 ? " верига" : " вериги") +
           "</p></div>" +
-          '<div class="catalog-best"><span>Най-нисък вариант</span><strong>' +
+          '<div class="catalog-best"><span>Най-евтин вариант</span><strong>' +
           eur(low.effective_price) +
           "</strong><small>" +
           esc(low.chain_name) +
           " · " +
           esc(low.name) +
           "</small></div>" +
+          '<label class="catalog-store-sort"><span>Подреди магазините</span><select data-catalog-sort-stores="' +
+          group.id +
+          '" aria-label="Сортирай магазините по най-ниската им цена">' +
+          '<option value="price-asc"' +
+          (storeSort === "price-asc" ? " selected" : "") +
+          '>Най-евтините първо</option>' +
+          '<option value="price-desc"' +
+          (storeSort === "price-desc" ? " selected" : "") +
+          '>Най-скъпите първо</option>' +
+          '<option value="name"' +
+          (storeSort === "name" ? " selected" : "") +
+          ">По име</option></select></label>" +
+          '<button type="button" class="icon-btn catalog-collapse" data-catalog-collapse="' +
+          group.id +
+          '" aria-controls="catalog-stores-' +
+          group.id +
+          '" aria-expanded="' +
+          String(!collapsed) +
+          '" aria-label="' +
+          (collapsed ? "Разгъни предложенията" : "Свий предложенията") +
+          '" title="' +
+          (collapsed ? "Покажи предложенията" : "Скрий предложенията") +
+          '"><span data-icon="' +
+          (collapsed ? "chevron-down" : "chevron-up") +
+          '" data-size="16"></span></button>' +
           '<button type="button" class="btn btn-soft btn-sm" data-add-cat="' +
           group.id +
           '"><span data-icon="plus" data-size="14"></span> В кошницата</button>' +
           "</div>" +
-          '<div class="catalog-stores">' +
+          '<div class="catalog-stores" id="catalog-stores-' +
+          group.id +
+          '"' +
+          (collapsed ? " hidden" : "") +
+          ">" +
           stores +
+          moreStoresButton +
           "</div></article>"
         );
       })
@@ -2211,6 +2325,7 @@
       rt.deals.verified.clear();
       catalog.loaded = false;
       catalog.rows = [];
+      catalog.categoryIndex = [];
       if (state.tab === "catalog") loadCatalog();
       toast(
         wasLive
@@ -2279,6 +2394,24 @@
           name: el.dataset.name,
           category_id: el.dataset.cat ? Number(el.dataset.cat) : null,
         });
+      }
+      if ((el = t.closest("[data-catalog-offers-toggle]"))) {
+        const key = el.dataset.catalogOffersToggle;
+        if (catalog.expandedStores.has(key)) catalog.expandedStores.delete(key);
+        else catalog.expandedStores.add(key);
+        return renderCatalog();
+      }
+      if ((el = t.closest("[data-catalog-stores-toggle]"))) {
+        const id = Number(el.dataset.catalogStoresToggle);
+        if (catalog.expandedChainGroups.has(id)) catalog.expandedChainGroups.delete(id);
+        else catalog.expandedChainGroups.add(id);
+        return renderCatalog();
+      }
+      if ((el = t.closest("[data-catalog-collapse]"))) {
+        const id = Number(el.dataset.catalogCollapse);
+        if (catalog.collapsedGroups.has(id)) catalog.collapsedGroups.delete(id);
+        else catalog.collapsedGroups.add(id);
+        return renderCatalog();
       }
       if ((el = t.closest("[data-quick]")))
         return addCategory(Number(el.dataset.quick));
@@ -2466,20 +2599,24 @@
         catalog.query = e.target.value.trim();
         catalog.shown = 12;
         renderCatalog();
-      }, 160);
+      }, 240);
     });
     $("#catalog-category").addEventListener("change", (e) => {
       catalog.group = e.target.value;
       catalog.shown = 12;
       renderCatalog();
     });
-    $("#catalog-sort").addEventListener("change", (e) => {
-      catalog.sort = e.target.value;
-      catalog.shown = 12;
-      renderCatalog();
-    });
     $("#catalog-more").addEventListener("click", () => {
       catalog.shown += 12;
+      renderCatalog();
+    });
+    $("#catalog-grid").addEventListener("change", (e) => {
+      const select = e.target.closest("[data-catalog-sort-stores]");
+      if (!select) return;
+      catalog.storeSortByCategory.set(
+        Number(select.dataset.catalogSortStores),
+        select.value,
+      );
       renderCatalog();
     });
     /* история */

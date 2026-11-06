@@ -274,6 +274,7 @@
       name: String(p.name || ""),
       chain_name: String(p.chain_name || ""),
       category_id: Number(p.category_id),
+      store_address: String(p.store_address || ""),
       regular_price: reg,
       promo_price: promo,
       effective_price:
@@ -432,7 +433,7 @@
               return;
             q.set(k, v === true ? "true" : String(v));
           });
-          const rows = await http(`/products?${q.toString()}`);
+          const rows = await http(`/products?${q.toString()}`, { timeout: 20000 });
           return rows.map(normProduct);
         } catch (e) {
           if (!isOutage(e)) throw e;

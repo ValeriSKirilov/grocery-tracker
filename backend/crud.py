@@ -36,29 +36,60 @@ def get_products(
         )
     latest_date_query = latest_date_query.scalar_subquery()
 
-    statement = (
+    ranked_products = (
         select(
             Product.id.label("product_id"),
             Product.name,
             Product.chain_name,
             Product.category_id,
+            PriceRecord.store_address.label("store_address"),
             PriceRecord.regular_price,
             PriceRecord.promo_price,
             PriceRecord.effective_price,
             PriceRecord.date,
+            func.row_number()
+            .over(
+                partition_by=Product.id,
+                order_by=(
+                    PriceRecord.effective_price.asc(),
+                    PriceRecord.store_address.asc(),
+                ),
+            )
+            .label("location_rank"),
         )
         .join(PriceRecord, Product.id == PriceRecord.product_id)
         .where(PriceRecord.date == latest_date_query)
     )
 
     if ekatte_code:
-        statement = statement.where(PriceRecord.ekatte_code == ekatte_code)
+        ranked_products = ranked_products.where(PriceRecord.ekatte_code == ekatte_code)
     if chain:
-        statement = statement.where(Product.chain_name == chain)
+        ranked_products = ranked_products.where(Product.chain_name == chain)
     if category_id:
-        statement = statement.where(Product.category_id == category_id)
+        ranked_products = ranked_products.where(Product.category_id == category_id)
     if promo_only:
-        statement = statement.where(PriceRecord.promo_price.isnot(None))
+        ranked_products = ranked_products.where(PriceRecord.promo_price.isnot(None))
+
+    # A retailer product can have one price record per physical store address.
+    # Keep every distinct product/chain offer, but represent it once using the
+    # cheapest current location in the selected city. This avoids sending
+    # hundreds of thousands of duplicate-location rows to the catalog.
+    ranked = ranked_products.subquery()
+    statement = (
+        select(
+            ranked.c.product_id,
+            ranked.c.name,
+            ranked.c.chain_name,
+            ranked.c.category_id,
+            ranked.c.store_address,
+            ranked.c.regular_price,
+            ranked.c.promo_price,
+            ranked.c.effective_price,
+            ranked.c.date,
+        )
+        .where(ranked.c.location_rank == 1)
+        .order_by(ranked.c.category_id, ranked.c.name, ranked.c.chain_name)
+    )
 
     return db.execute(statement).mappings().all()
 
@@ -156,19 +187,32 @@ def get_product_history(db: Session, product_id: int, ekatte_code: str):
         select(
             Product.name,
             Product.chain_name,
+            PriceRecord.store_address,
             PriceRecord.date,
             PriceRecord.regular_price,
             PriceRecord.promo_price,
+            PriceRecord.effective_price,
         )
         .join(Product, Product.id == PriceRecord.product_id)
         .where(PriceRecord.product_id == product_id)
         .where(PriceRecord.ekatte_code == ekatte_code)
-        .order_by(PriceRecord.date.asc())
+        .order_by(PriceRecord.date.asc(), PriceRecord.store_address.asc())
     )
-    records = db.execute(statement).mappings().all()
+    all_records = db.execute(statement).mappings().all()
 
-    if not records:
+    if not all_records:
         return None
+
+    # A product can be sold at multiple addresses within one city. Follow the
+    # cheapest location on the latest date, matching the catalog's current
+    # offer, instead of mixing store histories in one chart.
+    latest_date = max(record.date for record in all_records)
+    latest_record = min(
+        (record for record in all_records if record.date == latest_date),
+        key=lambda record: (record.effective_price, record.store_address),
+    )
+    latest_store_address = latest_record.store_address
+    records = [r for r in all_records if r.store_address == latest_store_address]
 
     fake_discount_warning = False
     latest = records[-1]
@@ -203,6 +247,7 @@ def get_product_history(db: Session, product_id: int, ekatte_code: str):
         "product_id": product_id,
         "product_name": records[0].name,
         "chain_name": records[0].chain_name,
+        "store_address": latest_store_address,
         "dates": [str(r.date) for r in records],
         "regular_prices": [float(r.regular_price) for r in records],
         "promo_prices": [
