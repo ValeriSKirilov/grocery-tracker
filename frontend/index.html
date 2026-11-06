@@ -1,54 +1,596 @@
-<!DOCTYPE html>
-<html lang ="bg">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Колко струва</title>
-    <link rel="stylesheet" href="style.css">
+<!doctype html>
+<html lang="bg" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Колко струва — умна кошница за пазаруване</title>
+    <meta
+      name="description"
+      content="Сравни цената на кошницата си във всички вериги, виж реалните промоции и планирай най-евтиното пазаруване. Данни от КЗП (kolkostruva.bg)."
+    />
+    <meta name="theme-color" content="#f4f6f4" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Прилага темата преди първото рисуване (без проблясване) -->
+    <script>
+      (function () {
+        try {
+          var m = localStorage.getItem("grocery-tracker-theme") || "system";
+          var dark =
+            m === "dark" ||
+            (m === "system" &&
+              matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+      defer
+    ></script>
+    <link rel="stylesheet" href="style.css" />
+    <script src="js/demo-data.js" defer></script>
+    <script src="js/core.js" defer></script>
     <script src="js/app.js" defer></script>
-</head>
-<body>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">Към съдържанието</a>
+
+    <!-- ───────────── Topbar ───────────── -->
     <header class="topbar">
-        <div>
-            <h1>Колко струва</h1>
-            <p> Сравни цената на своята кошница</p>
-        </div>
+      <div class="topbar-inner">
+        <a class="brand" href="./" aria-label="Колко струва — начало">
+          <span class="brand-logo" aria-hidden="true"
+            ><span data-icon="cart" data-size="22"></span
+          ></span>
+          <span class="brand-text">
+            <span class="brand-name">Колко струва</span>
+            <span class="brand-sub">Умна кошница · цени в €</span>
+          </span>
+        </a>
 
         <button
-            id="theme-toggle"
-            class="theme-toggle"
-            type="button"
-            aria-pressed="false"
+          id="open-search"
+          class="search-trigger"
+          type="button"
+          aria-label="Добави продукт в кошницата"
         >
-            <span id="theme-icon" aria-hidden="true">🌙</span>
-            <span id="theme-text">Dark Theme</span>
+          <span data-icon="search" data-size="16"></span>
+          <span class="search-trigger-text">Добави продукт…</span>
+          <kbd>/</kbd>
         </button>
+
+        <div class="topbar-actions">
+          <button
+            id="api-status"
+            class="status-pill"
+            type="button"
+            data-mode="demo"
+            title="Статус на връзката с данните"
+          >
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="api-status-text">Свързване…</span>
+          </button>
+          <button
+            id="theme-toggle"
+            class="icon-btn"
+            type="button"
+            aria-label="Смени темата"
+            title="Тема"
+          >
+            <span id="theme-icon" data-icon="monitor"></span>
+          </button>
+        </div>
+      </div>
     </header>
 
-    <main class="layout">
-        <section class="panel">
+    <div class="app">
+      <!-- ───────────── Кошница (sidebar / drawer) ───────────── -->
+      <aside class="basket" id="basket-panel" aria-label="Моята кошница">
+        <div class="basket-head">
+          <div>
             <h2>Моята кошница</h2>
+            <p id="basket-sub" class="muted">—</p>
+          </div>
+          <div class="basket-head-actions">
+            <button
+              id="open-baskets"
+              class="icon-btn"
+              type="button"
+              title="Готови и запазени кошници"
+              aria-label="Готови и запазени кошници"
+            >
+              <span data-icon="bookmark"></span>
+            </button>
+            <button
+              id="share-basket"
+              class="icon-btn"
+              type="button"
+              title="Копирай линк към кошницата"
+              aria-label="Копирай линк към кошницата"
+            >
+              <span data-icon="link"></span>
+            </button>
+            <button
+              id="close-drawer"
+              class="icon-btn drawer-only"
+              type="button"
+              aria-label="Затвори кошницата"
+            >
+              <span data-icon="x"></span>
+            </button>
+          </div>
+        </div>
 
-            <label for="city">Град</label>
-            <select id="city">
-                <option>София</option>
-            </select>
+        <div class="field">
+          <label for="city-input">Населено място</label>
+          <div class="combo" id="city-combo">
+            <span class="combo-ic" data-icon="pin" data-size="16"></span>
+            <input
+              id="city-input"
+              type="text"
+              role="combobox"
+              aria-expanded="false"
+              aria-controls="city-list"
+              aria-autocomplete="list"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Търси населено място…"
+            />
+            <ul id="city-list" class="combo-list" role="listbox" hidden></ul>
+          </div>
+        </div>
 
-            <ul id="basket-items">
-                <li>Прясно мляко 1 л — 1 бр.</li>
-            </ul>
+        <div class="switch-row">
+          <div>
+            <span class="switch-title">Седмични промоции</span>
+            <span class="switch-sub"
+              >Включи активните намаления в сметката</span
+            >
+          </div>
+          <label class="switch" for="promo-toggle">
+            <input type="checkbox" id="promo-toggle" role="switch" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
 
-            <p>Общо: <strong>примерна цена</strong></p>
-            <button id="compare-button">Сравни цените</button>
+        <div class="field">
+          <label for="add-input">Добави продукт</label>
+          <div class="combo" id="add-combo">
+            <span class="combo-ic" data-icon="search" data-size="16"></span>
+            <input
+              id="add-input"
+              type="text"
+              role="combobox"
+              aria-expanded="false"
+              aria-controls="add-list"
+              aria-autocomplete="list"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Мляко, хляб, сирене, домати…"
+            />
+            <ul id="add-list" class="combo-list" role="listbox" hidden></ul>
+          </div>
+        </div>
+
+        <div id="quick-chips" class="chips"></div>
+
+        <ul
+          id="basket-items"
+          class="basket-list"
+          aria-label="Избрани продукти"
+        ></ul>
+
+        <div class="budget">
+          <label for="budget-input"
+            >Бюджет <span class="muted">(по желание)</span></label
+          >
+          <div class="budget-input">
+            <input
+              id="budget-input"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="0.5"
+              placeholder="напр. 40"
+            />
+            <span>€</span>
+          </div>
+          <div id="budget-meter" class="budget-meter" hidden></div>
+        </div>
+
+        <div class="basket-foot">
+          <div class="foot-row">
+            <span>Най-ниска обща цена</span>
+            <strong id="sidebar-lowest-total" aria-live="polite">—</strong>
+          </div>
+          <p id="sidebar-lowest-chain" class="muted foot-sub"></p>
+          <button
+            id="reset-basket-btn"
+            class="btn btn-ghost btn-sm"
+            type="button"
+          >
+            <span data-icon="trash" data-size="15"></span> Изчисти кошницата
+          </button>
+        </div>
+      </aside>
+
+      <!-- ───────────── Основно съдържание ───────────── -->
+      <main id="main" class="main">
+        <nav class="tabs" id="tabs" role="tablist" aria-label="Изгледи">
+          <button
+            class="tab"
+            role="tab"
+            id="tab-compare"
+            data-tab="compare"
+            aria-controls="view-compare"
+            aria-selected="true"
+          >
+            <span data-icon="bars" data-size="17"></span><span>Сравнение</span>
+          </button>
+          <button
+            class="tab"
+            role="tab"
+            id="tab-plan"
+            data-tab="plan"
+            aria-controls="view-plan"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            <span data-icon="list-check" data-size="17"></span><span>План</span>
+          </button>
+          <button
+            class="tab"
+            role="tab"
+            id="tab-deals"
+            data-tab="deals"
+            aria-controls="view-deals"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            <span data-icon="tag" data-size="17"></span><span>Промоции</span>
+          </button>
+          <button
+            class="tab"
+            role="tab"
+            id="tab-history"
+            data-tab="history"
+            aria-controls="view-history"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            <span data-icon="trend-up" data-size="17"></span
+            ><span>История</span>
+          </button>
+        </nav>
+
+        <!-- ══ Сравнение ══ -->
+        <section
+          class="view"
+          id="view-compare"
+          role="tabpanel"
+          aria-labelledby="tab-compare"
+        >
+          <div id="hero"></div>
+
+          <div id="compare-body" hidden>
+            <div class="kpi-grid" aria-label="Ключови показатели">
+              <article class="kpi" id="kpi-promo"></article>
+              <article class="kpi" id="kpi-split"></article>
+              <article class="kpi" id="kpi-trend"></article>
+            </div>
+
+            <section class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>Цени по търговски вериги</h2>
+                  <p id="results-message" class="muted"></p>
+                </div>
+                <div class="panel-tools">
+                  <div
+                    class="seg"
+                    id="rank-seg"
+                    role="group"
+                    aria-label="Изглед на резултатите"
+                  >
+                    <button type="button" data-rank="rank" aria-pressed="true">
+                      Класация
+                    </button>
+                    <button
+                      type="button"
+                      data-rank="matrix"
+                      aria-pressed="false"
+                    >
+                      Матрица
+                    </button>
+                  </div>
+                  <button
+                    id="export-csv"
+                    class="btn btn-ghost btn-sm"
+                    type="button"
+                    title="Изтегли таблицата като CSV"
+                  >
+                    <span data-icon="download" data-size="15"></span> CSV
+                  </button>
+                </div>
+              </div>
+              <div id="chain-filter" class="chips chain-filter"></div>
+              <div id="store-results"></div>
+              <div id="excluded-note"></div>
+            </section>
+
+            <section class="panel" id="trend-card"></section>
+          </div>
         </section>
 
-    <section class="panel">
-      <h2>Цени по вериги</h2>
-      <p id="results-message">
-        Резултатите от сравнението ще се появят тук.
-      </p>
-      <div id="store-results"></div>
-    </section>
-    </main>
-</body>
+        <!-- ══ План за пазаруване ══ -->
+        <section
+          class="view"
+          id="view-plan"
+          role="tabpanel"
+          aria-labelledby="tab-plan"
+          hidden
+        >
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>План за пазаруване</h2>
+                <p class="muted">
+                  Колко магазина си готов да обиколиш? Подреждаме всеки продукт
+                  там, където е най-евтин.
+                </p>
+              </div>
+            </div>
+            <div
+              id="plan-opts"
+              class="plan-opts"
+              role="radiogroup"
+              aria-label="Брой магазини"
+            ></div>
+            <div id="plan-summary" class="plan-summary"></div>
+          </section>
+          <div id="plan-lists" class="plan-lists"></div>
+          <div id="plan-actions" class="plan-actions" hidden>
+            <button id="plan-copy" class="btn btn-primary" type="button">
+              <span data-icon="copy" data-size="16"></span> Копирай списъка
+            </button>
+            <button id="plan-print" class="btn btn-soft" type="button">
+              <span data-icon="printer" data-size="16"></span> Принтирай
+            </button>
+            <button id="plan-reset" class="btn btn-ghost" type="button">
+              <span data-icon="refresh" data-size="16"></span> Изчисти отметките
+            </button>
+          </div>
+        </section>
+
+        <!-- ══ Промоции ══ -->
+        <section
+          class="view"
+          id="view-deals"
+          role="tabpanel"
+          aria-labelledby="tab-deals"
+          hidden
+        >
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Активни промоции</h2>
+                <p id="deals-count" class="muted">Зареждане…</p>
+              </div>
+              <span class="badge-outline"
+                >Проверяваме за скрито повишение на цената</span
+              >
+            </div>
+
+            <div class="deals-controls">
+              <div class="input-ic">
+                <span data-icon="search" data-size="16"></span>
+                <input
+                  id="deals-q"
+                  type="search"
+                  placeholder="Търси в промоциите…"
+                  aria-label="Търси в промоциите"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="select-wrap">
+                <select id="deals-sort" aria-label="Подреди по">
+                  <option value="pct">Най-голяма отстъпка (%)</option>
+                  <option value="abs">Най-голяма отстъпка (€)</option>
+                  <option value="price">Най-ниска цена</option>
+                </select>
+              </div>
+              <label class="check-inline"
+                ><input id="deals-only-basket" type="checkbox" />
+                <span>Само от кошницата ми</span></label
+              >
+            </div>
+            <div id="deals-chains" class="chips"></div>
+
+            <div id="deals-grid" class="deal-grid"></div>
+            <div class="center">
+              <button id="deals-more" class="btn btn-soft" type="button" hidden>
+                Покажи още
+              </button>
+            </div>
+          </section>
+        </section>
+
+        <!-- ══ История ══ -->
+        <section
+          class="view"
+          id="view-history"
+          role="tabpanel"
+          aria-labelledby="tab-history"
+          hidden
+        >
+          <section class="panel" id="history-panel">
+            <div class="panel-head">
+              <div>
+                <div class="title-row">
+                  <h2>Ценова история и детектор на фалшиви промоции</h2>
+                  <span class="badge-outline">Чл. 55б ЗВЕРБ</span>
+                </div>
+                <p class="muted">
+                  Базова срещу промоционална цена — и дали намалението е
+                  истинско.
+                </p>
+              </div>
+            </div>
+
+            <div class="history-controls">
+              <div class="select-wrap">
+                <select
+                  id="h-category"
+                  aria-label="Продукт от кошницата"
+                ></select>
+              </div>
+              <div
+                id="h-chains"
+                class="chips"
+                role="group"
+                aria-label="Верига"
+              ></div>
+              <div class="seg" id="h-range" role="group" aria-label="Период">
+                <button type="button" data-range="30" aria-pressed="true">
+                  30 дни
+                </button>
+                <button type="button" data-range="60" aria-pressed="false">
+                  60
+                </button>
+                <button type="button" data-range="90" aria-pressed="false">
+                  90
+                </button>
+              </div>
+              <div class="seg" id="h-view" role="group" aria-label="Изглед">
+                <button type="button" data-hview="single" aria-pressed="true">
+                  Един продукт
+                </button>
+                <button type="button" data-hview="all" aria-pressed="false">
+                  Всички вериги
+                </button>
+              </div>
+            </div>
+
+            <div id="h-focus-note"></div>
+
+            <div id="fakeDiscountAlert" class="fake-alert" hidden>
+              <div class="alert-ic" aria-hidden="true">
+                <span data-icon="alert" data-size="22"></span>
+              </div>
+              <div>
+                <strong
+                  >Ценови сигнал: засечено е повишение на базовата цена преди
+                  промоцията!</strong
+                >
+                <p id="fakeDiscountText"></p>
+              </div>
+            </div>
+
+            <div id="h-stats" class="stat-row"></div>
+
+            <div id="h-chart-wrap" class="chart-wrap">
+              <canvas
+                id="priceHistoryChart"
+                aria-label="Графика на цената"
+                role="img"
+              ></canvas>
+            </div>
+            <div id="h-empty" class="state-inline" hidden></div>
+            <div id="h-verdict"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <p>
+          <strong>Източник на данни:</strong> Портал „Колко струва“ (<a
+            href="https://kolkostruva.bg"
+            target="_blank"
+            rel="noopener"
+            >kolkostruva.bg</a
+          >) — Комисия за защита на потребителите (КЗП).
+        </p>
+        <p class="footer-sub">
+          Отворени данни по чл. 55б от Закона за въвеждане на еврото в Република
+          България • Проект по СПАИТ
+        </p>
+      </div>
+    </footer>
+
+    <!-- Мобилна лента + drawer -->
+    <div class="scrim" id="scrim"></div>
+    <div class="mobile-bar" id="mobile-bar">
+      <button
+        id="mobile-open"
+        type="button"
+        aria-controls="basket-panel"
+        aria-expanded="false"
+      >
+        <span class="mb-ic" data-icon="cart" data-size="20"></span>
+        <span class="mb-text">
+          <b id="mobile-count">Кошница</b>
+          <small id="mobile-total">—</small>
+        </span>
+        <span class="mb-cta"
+          >Отвори <span data-icon="chevron-up" data-size="16"></span
+        ></span>
+      </button>
+    </div>
+
+    <!-- Диалог: кошници -->
+    <dialog id="baskets-dialog" class="dialog" aria-labelledby="dialog-title">
+      <div class="dialog-card">
+        <header class="dialog-head">
+          <h2 id="dialog-title">Кошници</h2>
+          <button
+            id="dialog-close"
+            class="icon-btn"
+            type="button"
+            aria-label="Затвори"
+          >
+            <span data-icon="x"></span>
+          </button>
+        </header>
+
+        <form id="save-form" class="save-form" autocomplete="off">
+          <input
+            id="save-name"
+            type="text"
+            maxlength="40"
+            placeholder="Име на текущата кошница…"
+            aria-label="Име на кошницата"
+            required
+          />
+          <button class="btn btn-primary" type="submit">Запази</button>
+        </form>
+
+        <h3 class="dialog-sub">Моите кошници</h3>
+        <ul id="saved-list" class="saved-list"></ul>
+
+        <h3 class="dialog-sub">Готови кошници</h3>
+        <div id="template-grid" class="template-grid"></div>
+      </div>
+    </dialog>
+
+    <div
+      id="toasts"
+      class="toasts"
+      aria-live="polite"
+      aria-atomic="false"
+    ></div>
+  </body>
 </html>
