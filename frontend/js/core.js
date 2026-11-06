@@ -110,7 +110,7 @@
       ? st.excluded_chains.map(String)
       : [];
     st.max_stores = clamp(Math.round(Number(st.max_stores) || 2), 1, 3);
-    st.tab = ["compare", "plan", "deals", "history"].includes(st.tab)
+    st.tab = ["compare", "catalog", "plan", "deals", "history"].includes(st.tab)
       ? st.tab
       : "compare";
     st.checked = st.checked && typeof st.checked === "object" ? st.checked : {};

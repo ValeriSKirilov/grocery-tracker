@@ -57,7 +57,17 @@
   const mobileMQ = window.matchMedia
     ? matchMedia("(max-width: 1080px)")
     : { matches: false };
-  let booted = false;
+  const catalog = {
+    rows: [],
+    loading: false,
+    loaded: false,
+    error: false,
+    query: "",
+    group: "all",
+    sort: "price",
+    shown: 12,
+    requestId: 0,
+  };  let booted = false;
 
   /* ───────────────────────── icons ───────────────────────── */
   const ICONS = {
@@ -221,6 +231,7 @@
 
   const catOf = (id) => rt.catById.get(id) || rt.knownCats.get(id);
   const catName = (id) => (catOf(id) ? catOf(id).name : `Категория #${id}`);
+  const catGroup = (id) => (catOf(id) ? catOf(id).group : "Други");
   const shortName = (c) =>
     c.short || c.name.replace(/\s*\(.*?\)\s*/g, " ").trim();
   const cityName = () =>
@@ -567,11 +578,15 @@
     rt.deals.all = [];
     rt.deals.verified.clear();
     rt.deals.shown = 12;
+    catalog.loaded = false;
+    catalog.rows = [];
+    catalog.shown = 12;
     rt.prevBest = null;
     $("#city-input").value = cityName();
+    if (state.tab === "catalog") loadCatalog();
     if (state.tab === "deals") loadDeals();
     scheduleRefresh(0);
-    if (!opts.silent) toast(`Цените са за ${cityName()}`);
+    if (!opts.silent) toast("Цените са за " + cityName());
   }
 
   /* ───────────────────────── зареждане на резултатите ───────────────────────── */
@@ -654,6 +669,7 @@
     renderCompare();
     renderPlan();
     renderMobileBar();
+    if (state.tab === "catalog") renderCatalog();
     if (state.tab === "deals") renderDeals();
     if (state.tab === "history") drawHistory();
     else renderHistoryControls();
@@ -1202,6 +1218,247 @@
     return lines.join("\n");
   }
 
+  /* ───────────────────────── каталог: всички продукти по групи ───────────────────────── */
+  async function loadCatalog() {
+    if (catalog.loading) return;
+    const requestId = ++catalog.requestId;
+    const city = state.ekatte_code;
+    catalog.loading = true;
+    catalog.error = false;
+    renderCatalog();
+
+    try {
+      const rows = await Data.products({ ekatte_code: city });
+      if (requestId !== catalog.requestId) return;
+      if (city !== state.ekatte_code) {
+        catalog.loading = false;
+        catalog.loaded = false;
+        loadCatalog();
+        return;
+      }
+      catalog.rows = rows;
+      catalog.loaded = true;
+    } catch (err) {
+      if (requestId !== catalog.requestId) return;
+      console.error("Не успяхме да заредим каталога:", err);
+      catalog.error = true;
+    }
+
+    catalog.loading = false;
+    renderCatalog();
+  }
+
+  function renderCatalog() {
+    const count = $("#catalog-count");
+    const grid = $("#catalog-grid");
+    const more = $("#catalog-more");
+    const categorySelect = $("#catalog-category");
+
+    const availableGroups = Array.from(
+      new Set(catalog.rows.map((p) => catGroup(p.category_id))),
+    ).sort((a, b) => a.localeCompare(b, "bg"));
+    categorySelect.innerHTML =
+      '<option value="all">Всички продуктови групи</option>' +
+      availableGroups
+        .map((group) => '<option value="' + esc(group) + '">' + esc(group) + "</option>")
+        .join("");
+    if (
+      catalog.group !== "all" &&
+      !availableGroups.includes(catalog.group)
+    ) {
+      catalog.group = "all";
+    }
+    categorySelect.value = catalog.group;
+
+    if (catalog.loading) {
+      count.textContent = "Зареждане на продуктите за " + cityName() + "…";
+      grid.innerHTML = '<div class="skel" style="height:170px"></div>'.repeat(4);
+      more.hidden = true;
+      return;
+    }
+    if (catalog.error) {
+      count.textContent = "Каталогът не можа да се зареди";
+      grid.innerHTML =
+        '<div class="state-inline">Не успяхме да заредим продуктите. Провери връзката с API-то и опитай отново.</div>' +
+        '<button type="button" class="btn btn-soft btn-sm" data-retry-catalog>Опитай отново</button>';
+      more.hidden = true;
+      return;
+    }
+
+    const query = norm(catalog.query);
+    const baseRows = catalog.rows.filter(
+      (p) =>
+        catalog.group === "all" ||
+        catGroup(p.category_id) === catalog.group,
+    );
+    const matchingIds = new Set(
+      baseRows
+        .filter(
+          (p) =>
+            !query ||
+            norm(p.name).includes(query) ||
+            norm(catName(p.category_id)).includes(query) ||
+            norm(catGroup(p.category_id)).includes(query),
+        )
+        .map((p) => Number(p.category_id)),
+    );
+    const rows = baseRows.filter((p) =>
+      matchingIds.has(Number(p.category_id)),
+    );
+    const grouped = new Map();
+    rows.forEach((p) => {
+      const id = Number(p.category_id);
+      if (!grouped.has(id)) {
+        grouped.set(id, { id, name: catName(id), rows: [] });
+      }
+      grouped.get(id).rows.push(p);
+    });
+    const groups = Array.from(grouped.values()).map((group) => {
+      group.rows.sort(
+        (a, b) => Number(a.effective_price) - Number(b.effective_price),
+      );
+      group.lowest = group.rows[0] || null;
+      return group;
+    });
+    if (catalog.sort === "name") {
+      groups.sort((a, b) => a.name.localeCompare(b.name, "bg"));
+    } else {
+      groups.sort(
+        (a, b) =>
+          Number(a.lowest && a.lowest.effective_price) -
+          Number(b.lowest && b.lowest.effective_price),
+      );
+    }
+
+    const itemCount = rows.length;
+    const latestDate = rows
+      .map((p) => String(p.date || ""))
+      .filter(Boolean)
+      .sort()
+      .slice(-1)[0];
+    count.textContent =
+      groups.length +
+      (groups.length === 1 ? " продуктова група" : " продуктови групи") +
+      " · " +
+      itemCount +
+      (itemCount === 1 ? " предложение" : " предложения") +
+      " · " +
+      cityName() +
+      (latestDate ? " · данни към " + latestDate : "");
+
+    if (!groups.length) {
+      grid.innerHTML =
+        '<div class="state-inline">Няма продукти, които отговарят на търсенето.</div>';
+      more.hidden = true;
+      return;
+    }
+
+    const chains = Array.from(
+      new Set([
+        ...rt.meta.chains,
+        ...rows.map((p) => p.chain_name).filter(Boolean),
+      ]),
+    );
+    const visibleGroups = groups.slice(0, catalog.shown);
+    grid.innerHTML = visibleGroups
+      .map((group) => {
+        const low = group.lowest;
+        const stores = chains
+          .map((chain) => {
+            const offers = group.rows.filter((p) => p.chain_name === chain);
+            const offersHtml = offers.length
+              ? offers
+                  .map((p) => {
+                    const regular = Number(p.regular_price) || 0;
+                    const current =
+                      p.effective_price == null
+                        ? regular
+                        : Number(p.effective_price);
+                    const promo =
+                      p.promo_price != null &&
+                      Number(p.promo_price) < regular;
+                    const cheapest =
+                      Math.abs(current - Number(low.effective_price)) < 0.000001;
+                    return (
+                      '<article class="catalog-offer' +
+                      (cheapest ? " is-cheapest" : "") +
+                      '">' +
+                      '<div class="catalog-offer-name">' +
+                      esc(p.name) +
+                      "</div>" +
+                      '<div class="catalog-offer-price">' +
+                      (promo ? "<s>" + eur(regular) + "</s>" : "") +
+                      '<strong class="' +
+                      (promo ? "is-promo" : "") +
+                      '">' +
+                      eur(current) +
+                      "</strong>" +
+                      (promo ? '<span class="catalog-promo">Промоция</span>' : "") +
+                      "</div>" +
+                      '<button type="button" class="btn btn-ghost btn-sm" data-hist="' +
+                      esc(p.product_id) +
+                      '" data-chain="' +
+                      esc(p.chain_name) +
+                      '" data-cat="' +
+                      Number(p.category_id) +
+                      '" data-name="' +
+                      esc(p.name) +
+                      '">История</button>' +
+                      "</article>"
+                    );
+                  })
+                  .join("")
+              : '<p class="catalog-no-data">Няма данни</p>';
+            return (
+              '<section class="catalog-store">' +
+              "<h4>" +
+              avatar(chain) +
+              " " +
+              esc(chain) +
+              "</h4>" +
+              offersHtml +
+              "</section>"
+            );
+          })
+          .join("");
+        const chainCount = new Set(group.rows.map((p) => p.chain_name)).size;
+        return (
+          '<article class="catalog-group">' +
+          '<div class="catalog-group-head">' +
+          "<div><h3>" +
+          esc(group.name) +
+          '</h3><p class="muted">' +
+          group.rows.length +
+          (group.rows.length === 1 ? " предложение" : " предложения") +
+          " в " +
+          chainCount +
+          (chainCount === 1 ? " верига" : " вериги") +
+          "</p></div>" +
+          '<div class="catalog-best"><span>Най-нисък вариант</span><strong>' +
+          eur(low.effective_price) +
+          "</strong><small>" +
+          esc(low.chain_name) +
+          " · " +
+          esc(low.name) +
+          "</small></div>" +
+          '<button type="button" class="btn btn-soft btn-sm" data-add-cat="' +
+          group.id +
+          '"><span data-icon="plus" data-size="14"></span> В кошницата</button>' +
+          "</div>" +
+          '<div class="catalog-stores">' +
+          stores +
+          "</div></article>"
+        );
+      })
+      .join("");
+
+    hydrateIcons(grid);
+    more.hidden = groups.length <= catalog.shown;
+    if (!more.hidden) {
+      more.textContent =
+        "Покажи още (" + (groups.length - catalog.shown) + ")";
+    }
+  }
   /* ───────────────────────── промоции ───────────────────────── */
   async function loadDeals() {
     const d = rt.deals;
@@ -1884,7 +2141,7 @@
 
   /* ───────────────────────── табове, drawer ───────────────────────── */
   function setTab(name, opts = {}) {
-    if (!["compare", "plan", "deals", "history"].includes(name))
+    if (!["compare", "catalog", "plan", "deals", "history"].includes(name))
       name = "compare";
     state.tab = name;
     saveState();
@@ -1903,6 +2160,10 @@
         renderDeals();
         verifyVisibleDeals();
       }
+    }
+    if (name === "catalog") {
+      if (!catalog.loaded && !catalog.loading) loadCatalog();
+      else renderCatalog();
     }
     if (name === "history") drawHistory();
     if (name === "plan") renderPlan();
@@ -1948,6 +2209,9 @@
       rt.deals.loaded = false;
       rt.deals.all = [];
       rt.deals.verified.clear();
+      catalog.loaded = false;
+      catalog.rows = [];
+      if (state.tab === "catalog") loadCatalog();
       toast(
         wasLive
           ? "Връзката с API-то е наред"
@@ -2024,7 +2288,7 @@
         return;
       }
       if (t.closest("[data-retry]")) return refresh();
-      if (t.closest("[data-retry-deals]")) return loadDeals();
+      if (t.closest("[data-retry-catalog]")) return loadCatalog();      if (t.closest("[data-retry-deals]")) return loadDeals();
       if ((el = t.closest("[data-remove-cat]")))
         return removeItem(Number(el.dataset.removeCat));
       if (t.closest("[data-focus-search]")) return focusSearch();
@@ -2194,6 +2458,30 @@
       verifyVisibleDeals();
     });
 
+    /* продуктов каталог */
+    let catalogTimer = null;
+    $("#catalog-q").addEventListener("input", (e) => {
+      clearTimeout(catalogTimer);
+      catalogTimer = setTimeout(() => {
+        catalog.query = e.target.value.trim();
+        catalog.shown = 12;
+        renderCatalog();
+      }, 160);
+    });
+    $("#catalog-category").addEventListener("change", (e) => {
+      catalog.group = e.target.value;
+      catalog.shown = 12;
+      renderCatalog();
+    });
+    $("#catalog-sort").addEventListener("change", (e) => {
+      catalog.sort = e.target.value;
+      catalog.shown = 12;
+      renderCatalog();
+    });
+    $("#catalog-more").addEventListener("click", () => {
+      catalog.shown += 12;
+      renderCatalog();
+    });
     /* история */
     $("#h-category").addEventListener("change", (e) => {
       rt.history.focus = null;
@@ -2346,6 +2634,7 @@
         { type: "warn" },
       );
     await refresh();
+    if (state.tab === "catalog") loadCatalog();
     if (state.tab === "deals") loadDeals();
     if (state.tab === "history") drawHistory();
   }

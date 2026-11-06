@@ -242,6 +242,16 @@
           <button
             class="tab"
             role="tab"
+            id="tab-catalog"
+            data-tab="catalog"
+            aria-controls="view-catalog"
+            aria-selected="false"
+            tabindex="-1"
+          >
+            <span data-icon="search" data-size="17"></span><span>Каталог</span>
+          </button>          <button
+            class="tab"
+            role="tab"
             id="tab-plan"
             data-tab="plan"
             aria-controls="view-plan"
@@ -334,6 +344,57 @@
           </div>
         </section>
 
+        <!-- ══ Каталог и сравнение на всички продукти ══ -->
+        <section
+          class="view"
+          id="view-catalog"
+          role="tabpanel"
+          aria-labelledby="tab-catalog"
+          hidden
+        >
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Каталог на продуктите</h2>
+                <p class="muted">
+                  Сравни различни марки в една продуктова група. Цените са примерни, когато е избран демо режим.
+                </p>
+                <p id="catalog-count" class="muted">Зареждане…</p>
+              </div>
+            </div>
+
+            <div class="catalog-controls">
+              <div class="input-ic">
+                <span data-icon="search" data-size="16"></span>
+                <input
+                  id="catalog-q"
+                  type="search"
+                  placeholder="Търси продукт или марка…"
+                  aria-label="Търси продукт или марка"
+                  autocomplete="off"
+                />
+              </div>
+              <div class="select-wrap">
+                <select id="catalog-category" aria-label="Филтрирай по продуктова група">
+                  <option value="all">Всички продуктови групи</option>
+                </select>
+              </div>
+              <div class="select-wrap">
+                <select id="catalog-sort" aria-label="Подреди продуктите">
+                  <option value="price">Най-ниска цена първо</option>
+                  <option value="name">По име на категорията</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="catalog-grid" class="catalog-grid"></div>
+            <div class="center">
+              <button id="catalog-more" class="btn btn-soft" type="button" hidden>
+                Покажи още
+              </button>
+            </div>
+          </section>
+        </section>
         <!-- ══ План за пазаруване ══ -->
         <section
           class="view"
