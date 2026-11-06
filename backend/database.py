@@ -1,4 +1,4 @@
-from config import settings
+from backend.config import settings
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker

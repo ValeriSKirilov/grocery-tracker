@@ -25,6 +25,7 @@ class ProductPriceResponse(BaseModel):
     name: str
     chain_name: str
     category_id: int
+    store_address: str
     regular_price: float
     promo_price: float | None
     effective_price: float
@@ -68,6 +69,7 @@ class ProductHistoryResponse(BaseModel):
     product_id: int
     product_name: str
     chain_name: str
+    store_address: str
     dates: list[str]
     regular_prices: list[float]
     promo_prices: list[float | None]
