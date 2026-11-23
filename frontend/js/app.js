@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Колко струва — UI слой (рендериране, събития, графики).
+   Колко струва — UI слой (рендериране, събития, теми, графики).
    Зависи от js/demo-data.js и js/core.js (window.SB).
    ========================================================================== */
 (() => {
@@ -20,7 +20,12 @@
     pct0,
     plural,
     mapLimit,
+    displayChain,
+    chainColor,
+    smartShortName,
+    MAX_BUDGET,
     saveState,
+    cleanBudget,
     cleanItems,
     connect,
     sanitizeState,
@@ -28,12 +33,12 @@
     Data,
     getHistory,
     hasPromo,
-    visibleRankings,
     deriveView,
     cheapestFor,
     analyzeHistory,
     verdictFor,
     computeTrend,
+    computeMarketTrend,
   } = SB;
 
   /* ───────────────────────── DOM helpers ───────────────────────── */
@@ -57,6 +62,7 @@
   const mobileMQ = window.matchMedia
     ? matchMedia("(max-width: 1080px)")
     : { matches: false };
+
   const catalog = {
     rows: [],
     categoryIndex: [],
@@ -88,10 +94,6 @@
     link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
     copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>',
     bookmark: '<path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
-    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-    moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
-    monitor:
-      '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
     check: '<path d="M20 6 9 17l-5-5"/>',
     "chevron-down": '<path d="m6 9 6 6 6-6"/>',
     "chevron-up": '<path d="m18 15-6-6-6 6"/>',
@@ -116,8 +118,6 @@
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
     "list-check": '<path d="m3 6 2 2 4-4M3 14l2 2 4-4M13 7h8M13 15h8"/>',
     bars: '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>',
-    layers:
-      '<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
   };
   const icon = (name, size = 18) =>
     `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
@@ -127,179 +127,181 @@
         el.innerHTML = icon(el.dataset.icon, Number(el.dataset.size) || 18);
     });
 
-  /* ───────────────────────── конфигурация на съдържанието ───────────────────────── */
-  const POPULAR_IDS = [12, 20, 1, 18, 45, 31, 52, 4, 15, 901, 903, 906];
-  const TEMPLATES = [
-    {
-      id: "week",
-      emoji: "🛒",
-      name: "Седмична за двама",
-      desc: "Основното за седмицата",
-      items: [
-        [12, 2],
-        [15, 2],
-        [20, 1],
-        [1, 2],
-        [18, 1],
-        [31, 1],
-        [45, 1],
-        [52, 1],
-        [901, 1],
-      ],
-    },
-    {
-      id: "breakfast",
-      emoji: "🥐",
-      name: "Закуска",
-      desc: "Мляко, яйца, хляб и масло",
-      items: [
-        [12, 1],
-        [20, 1],
-        [1, 1],
-        [906, 1],
-        [15, 1],
-      ],
-    },
-    {
-      id: "student",
-      emoji: "🍝",
-      name: "Студентска кошница",
-      desc: "Евтино и засищащо",
-      items: [
-        [905, 2],
-        [904, 1],
-        [20, 1],
-        [45, 1],
-        [52, 1],
-        [1, 1],
-      ],
-    },
-    {
-      id: "baking",
-      emoji: "🍰",
-      name: "Печене",
-      desc: "Брашно, яйца, захар, масло",
-      items: [
-        [4, 2],
-        [20, 2],
-        [908, 1],
-        [906, 2],
-        [12, 1],
-      ],
-    },
-    {
-      id: "dairy",
-      emoji: "🧀",
-      name: "Млечна кошница",
-      desc: "Сирене, кашкавал, кисело мляко",
-      items: [
-        [18, 1],
-        [907, 1],
-        [15, 3],
-        [12, 2],
-        [906, 1],
-      ],
-    },
-    {
-      id: "basics",
-      emoji: "📦",
-      name: "Основни продукти",
-      desc: "Началната ти кошница",
-      items: [
-        [12, 2],
-        [20, 1],
-        [1, 1],
-        [18, 1],
-      ],
-    },
-  ];
-  const CHAIN_COLORS = {
-    Billa: "#e11d48",
-    Kaufland: "#6366f1",
-    Lidl: "#0ea5e9",
-    Fantastico: "#f59e0b",
+  /* ───────────────────────── помощници за имена и аватари ───────────────────────── */
+  const avatar = (rawName) => {
+    const clean = displayChain(rawName);
+    const letter = String(clean || rawName)
+      .trim()
+      .slice(0, 1)
+      .toUpperCase();
+    return `<span class="chain-av" style="--c:${chainColor(rawName)}" aria-hidden="true">${esc(letter)}</span>`;
   };
-  const EXTRA_COLORS = [
-    "#10b981",
-    "#8b5cf6",
-    "#ec4899",
-    "#14b8a6",
-    "#f97316",
-    "#84cc16",
-  ];
-  function chainColor(name) {
-    if (CHAIN_COLORS[name]) return CHAIN_COLORS[name];
-    let h = 0;
-    for (let i = 0; i < name.length; i++)
-      h = (h * 31 + name.charCodeAt(i)) >>> 0;
-    return EXTRA_COLORS[h % EXTRA_COLORS.length];
-  }
-  const avatar = (name) =>
-    `<span class="chain-av" style="--c:${chainColor(name)}" aria-hidden="true">${esc(String(name).trim().slice(0, 1).toUpperCase())}</span>`;
+  const chainTitleAttr = (rawName) => {
+    const clean = displayChain(rawName);
+    return clean !== rawName ? ` title="${esc(rawName)}"` : "";
+  };
 
   const catOf = (id) => rt.catById.get(id) || rt.knownCats.get(id);
   const catName = (id) => (catOf(id) ? catOf(id).name : `Категория #${id}`);
   const catGroup = (id) => (catOf(id) ? catOf(id).group : "Други");
-  const shortName = (c) =>
-    c.short || c.name.replace(/\s*\(.*?\)\s*/g, " ").trim();
   const cityName = () =>
     (rt.settlementByCode.get(state.ekatte_code) || {}).name ||
     state.ekatte_code;
   const countLabel = (n, one, many) => `${n} ${plural(n, one, many)}`;
 
-  /* ───────────────────────── тема ───────────────────────── */
+  /* ───────────────────────── 6 теми + размер на шрифта (А+) ───────────────────────── */
   const THEME_KEY = "grocery-tracker-theme";
-  const THEME_CYCLE = ["system", "light", "dark"];
-  const THEME_LABEL = { system: "Автоматична", light: "Светла", dark: "Тъмна" };
-  const darkMQ = window.matchMedia
-    ? matchMedia("(prefers-color-scheme: dark)")
-    : null;
-  let themeMode = "system";
-  try {
-    themeMode = localStorage.getItem(THEME_KEY) || "system";
-  } catch (_) {
-    /* ignore */
-  }
-  if (!THEME_CYCLE.includes(themeMode)) themeMode = "system";
-  const resolvedTheme = () =>
-    themeMode === "dark" || (themeMode === "system" && darkMQ && darkMQ.matches)
-      ? "dark"
-      : "light";
+  const FONT_KEY = "grocery-tracker-font";
 
-  function applyTheme() {
-    const t = resolvedTheme();
-    document.documentElement.dataset.theme = t;
-    const meta = $('meta[name="theme-color"]');
-    if (meta)
-      meta.setAttribute("content", t === "dark" ? "#0a100e" : "#f4f6f4");
-    $("#theme-icon").innerHTML = icon(
-      themeMode === "system"
-        ? "monitor"
-        : themeMode === "dark"
-          ? "moon"
-          : "sun",
-    );
-    const btn = $("#theme-toggle");
-    btn.title = `Тема: ${THEME_LABEL[themeMode]}`;
-    btn.setAttribute(
-      "aria-label",
-      `Тема: ${THEME_LABEL[themeMode]}. Натисни за смяна.`,
-    );
-    if (booted && state.tab === "history") drawHistory();
+  const THEMES = [
+    {
+      id: "emerald",
+      name: "Изумруд",
+      sub: "Свежа светла",
+      meta: "#f4f7f5",
+      dots: ["#f4f7f5", "#059669", "#064e3b"],
+    },
+    {
+      id: "ocean",
+      name: "Океан",
+      sub: "Синя светла",
+      meta: "#f1f5fb",
+      dots: ["#f1f5fb", "#2563eb", "#102563"],
+    },
+    {
+      id: "crimson",
+      name: "Бордо",
+      sub: "Червена светла",
+      meta: "#faf4f5",
+      dots: ["#faf4f5", "#be123c", "#5c0d23"],
+    },
+    {
+      id: "warm",
+      name: "Топъл крем",
+      sub: "Мека светла",
+      meta: "#faf2df",
+      dots: ["#faf2df", "#c25e18", "#1a2236"],
+    },
+    {
+      id: "dark",
+      name: "Нощ",
+      sub: "Тъмна зелена",
+      meta: "#090f0d",
+      dots: ["#090f0d", "#34d399", "#047857"],
+    },
+    {
+      id: "midnight",
+      name: "Полунощ",
+      sub: "Тъмна синя",
+      meta: "#0b101d",
+      dots: ["#0b101d", "#60a5fa", "#1d4ed8"],
+    },
+  ];
+  const THEME_BY_ID = new Map(THEMES.map((t) => [t.id, t]));
+
+  const FONTS = [
+    {
+      id: "normal",
+      badge: "А+",
+      label: "Нормален",
+      toast: "Нормален размер на текста",
+    },
+    {
+      id: "large",
+      badge: "А+",
+      label: "Едър",
+      toast: "Едър текст (по-лесно четене)",
+    },
+    {
+      id: "xlarge",
+      badge: "А++",
+      label: "Много едър",
+      toast: "Много едър текст",
+    },
+  ];
+
+  let currentTheme = document.documentElement.dataset.theme || "emerald";
+  if (!THEME_BY_ID.has(currentTheme)) currentTheme = "emerald";
+
+  let currentFont = document.documentElement.dataset.font || "normal";
+  if (!FONTS.some((f) => f.id === currentFont)) currentFont = "normal";
+
+  function renderThemeMenu() {
+    const grid = $("#theme-grid");
+    if (!grid) return;
+    grid.innerHTML = THEMES.map((t) => {
+      const active = t.id === currentTheme;
+      return `<button type="button" class="theme-opt" role="menuitemradio" aria-checked="${active}" data-theme-id="${t.id}">
+        <span class="theme-opt-top">
+          <span class="theme-dots">${t.dots.map((c) => `<i style="background:${c}"></i>`).join("")}</span>
+          <span class="theme-opt-check">${icon("check", 14)}</span>
+        </span>
+        <span class="theme-opt-name">${esc(t.name)}</span>
+        <span class="theme-opt-sub">${esc(t.sub)}</span>
+      </button>`;
+    }).join("");
   }
-  function cycleTheme() {
-    themeMode =
-      THEME_CYCLE[(THEME_CYCLE.indexOf(themeMode) + 1) % THEME_CYCLE.length];
+
+  function applyTheme(id, notify = false) {
+    if (!THEME_BY_ID.has(id)) id = "emerald";
+    currentTheme = id;
+    document.documentElement.dataset.theme = id;
     try {
-      localStorage.setItem(THEME_KEY, themeMode);
+      localStorage.setItem(THEME_KEY, id);
     } catch (_) {
       /* ignore */
     }
-    applyTheme();
-    toast(`Тема: ${THEME_LABEL[themeMode].toLowerCase()}`);
+    const t = THEME_BY_ID.get(id);
+    const meta = $('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", t.meta);
+    const lbl = $("#theme-label");
+    if (lbl) lbl.textContent = t.name;
+    renderThemeMenu();
+    if (booted && state.tab === "history") drawHistory();
+    if (notify) toast(`Тема: ${t.name}`);
   }
 
-  /* ───────────────────────── toast ───────────────────────── */
+  function setThemeMenuOpen(open) {
+    const menu = $("#theme-menu");
+    const btn = $("#theme-toggle");
+    if (!menu || !btn) return;
+    menu.hidden = !open;
+    btn.setAttribute("aria-expanded", String(open));
+  }
+
+  function applyFont(id, notify = false) {
+    const spec = FONTS.find((f) => f.id === id) || FONTS[0];
+    currentFont = spec.id;
+    document.documentElement.dataset.font = spec.id;
+    try {
+      localStorage.setItem(FONT_KEY, spec.id);
+    } catch (_) {
+      /* ignore */
+    }
+    const btn = $("#font-toggle");
+    if (btn) {
+      btn.dataset.active = String(spec.id !== "normal");
+      btn.setAttribute(
+        "aria-label",
+        `Размер на текста: ${spec.label}. Натисни за смяна.`,
+      );
+      btn.title = `Размер на текста: ${spec.label} (натисни за смяна)`;
+    }
+    const badge = $("#font-badge");
+    if (badge) badge.textContent = spec.badge;
+    const lbl = $("#font-label");
+    if (lbl) lbl.textContent = spec.id === "normal" ? "Текст" : spec.label;
+    if (booted && state.tab === "history") drawHistory();
+    if (notify) toast(spec.toast);
+  }
+
+  function cycleFont() {
+    const idx = FONTS.findIndex((f) => f.id === currentFont);
+    const next = FONTS[(idx + 1) % FONTS.length];
+    applyFont(next.id, true);
+  }
+
+  /* ───────────────────────── toast & utilities ───────────────────────── */
   function toast(msg, opts = {}) {
     const box = $("#toasts");
     const el = document.createElement("div");
@@ -354,7 +356,7 @@
       return;
     }
     const t0 = performance.now();
-    const dur = 520;
+    const dur = 480;
     el.textContent = eur(from);
     const step = (t) => {
       const p = Math.min(1, (t - t0) / dur);
@@ -382,17 +384,44 @@
     return `<svg class="spark${up ? " up" : ""}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><path class="spark-area" d="${d} L${w} ${h} L0 ${h} Z"/><path class="spark-line" d="${d}"/></svg>`;
   }
 
-  /* ───────────────────────── combobox ───────────────────────── */
+  /* ───────────────────────── Floating combobox (never clipped by scroll) ───────────────────────── */
   function createCombo({ input, list, getOptions, onPick, keepOpen = false }) {
     let opts = [];
     let active = -1;
     let open = false;
+
+    const place = () => {
+      if (!open) return;
+      const r = input.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const spaceBelow = vh - r.bottom - 12;
+      const spaceAbove = r.top - 12;
+      const openUp = spaceBelow < 180 && spaceAbove > spaceBelow;
+      const maxH = Math.max(
+        140,
+        Math.min(300, openUp ? spaceAbove : spaceBelow),
+      );
+      list.style.left = `${Math.max(8, Math.min(r.left, vw - r.width - 8))}px`;
+      list.style.width = `${Math.min(r.width, vw - 16)}px`;
+      list.style.maxHeight = `${maxH}px`;
+      if (openUp) {
+        list.style.top = "auto";
+        list.style.bottom = `${vh - r.top + 6}px`;
+      } else {
+        list.style.bottom = "auto";
+        list.style.top = `${r.bottom + 6}px`;
+      }
+    };
+
     const setOpen = (v) => {
       open = v;
       list.hidden = !v;
       input.setAttribute("aria-expanded", String(v));
-      if (!v) input.removeAttribute("aria-activedescendant");
+      if (v) place();
+      else input.removeAttribute("aria-activedescendant");
     };
+
     const render = () => {
       if (!opts.length) {
         list.innerHTML = `<li class="combo-empty">Няма резултати</li>`;
@@ -412,26 +441,29 @@
         if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
       }
     };
-    const refresh = () => {
+
+    const refreshCombo = () => {
       opts = getOptions(input.value.trim());
       active = opts.length ? 0 : -1;
       render();
       setOpen(true);
     };
+
     const pick = (o) => {
       onPick(o);
-      if (keepOpen) refresh();
+      if (keepOpen) refreshCombo();
       else setOpen(false);
     };
-    input.addEventListener("input", refresh);
+
+    input.addEventListener("input", refreshCombo);
     input.addEventListener("focus", () => {
       if (input.select) input.select();
-      refresh();
+      refreshCombo();
     });
     input.addEventListener("keydown", (e) => {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        if (!open) refresh();
+        if (!open) refreshCombo();
         else {
           active = Math.min(opts.length - 1, active + 1);
           render();
@@ -464,8 +496,10 @@
       if (open && !list.contains(e.target) && e.target !== input)
         setOpen(false);
     });
+    window.addEventListener("resize", place, { passive: true });
+    window.addEventListener("scroll", place, { passive: true, capture: true });
     input.addEventListener("blur", () => setTimeout(() => setOpen(false), 120));
-    return { close: () => setOpen(false), refresh };
+    return { close: () => setOpen(false), refresh: refreshCombo };
   }
 
   function cityOptions(q) {
@@ -521,6 +555,8 @@
     refreshTimer = setTimeout(refresh, delay);
   }
   function commitBasket() {
+    state.seededMode = "custom";
+    rt.excludedDiag = null;
     saveState();
     renderBasket();
     renderMobileBar();
@@ -543,6 +579,40 @@
     }
     it.qty = clamp(it.qty, 1, 99);
     commitBasket();
+  }
+  function setQty(id, raw, opts = {}) {
+    const it = state.items.find((i) => i.category_id === id);
+    if (!it) return false;
+    const cleaned = String(raw == null ? "" : raw).replace(/\D+/g, "");
+    if (!cleaned) return false;
+    const n = parseInt(cleaned, 10);
+    if (!Number.isFinite(n)) return false;
+    if (n <= 0) {
+      if (opts.allowRemove) {
+        removeItem(id);
+        return true;
+      }
+      return false;
+    }
+    const clamped = clamp(n, 1, 99);
+    if (n > 99 && opts.warnMax) {
+      toast("Максималното количество е 99 бр.", { type: "warn" });
+    }
+    if (it.qty === clamped) return true;
+    it.qty = clamped;
+    state.seededMode = "custom";
+    rt.excludedDiag = null;
+    saveState();
+    if (opts.live) {
+      const qtyTotal = state.items.reduce((a, x) => a + x.qty, 0);
+      $("#basket-sub").textContent =
+        `${countLabel(state.items.length, "продукт", "продукта")} · ${qtyTotal} бр.`;
+      renderMobileBar();
+      scheduleRefresh(380);
+    } else {
+      commitBasket();
+    }
+    return true;
   }
   function removeItem(id) {
     const before = clone(state.items);
@@ -578,18 +648,29 @@
     if (!state.items.length) return;
     replaceBasket([], "Кошницата е изчистена");
   }
-  function setCity(code, opts = {}) {
-    if (!code || code === state.ekatte_code) return;
-    state.ekatte_code = code;
-    saveState();
-    rt.deals.loaded = false;
-    rt.deals.all = [];
-    rt.deals.verified.clear();
-    rt.deals.shown = 12;
+  function resetCatalogCache() {
     catalog.loaded = false;
     catalog.rows = [];
     catalog.categoryIndex = [];
     catalog.shown = 12;
+    catalog.expandedStores.clear();
+    catalog.expandedChainGroups.clear();
+    catalog.collapsedGroups.clear();
+    catalog.storeSortByCategory.clear();
+  }
+  function setCity(code, opts = {}) {
+    if (!code || code === state.ekatte_code) return;
+    state.ekatte_code = code;
+    saveState();
+    rt.deals.token++;
+    rt.deals.loaded = false;
+    rt.deals.loading = false;
+    rt.deals.all = [];
+    rt.deals.verified.clear();
+    rt.deals.shown = 12;
+    rt.excludedOpen = false;
+    rt.excludedDiag = null;
+    resetCatalogCache();
     rt.prevBest = null;
     $("#city-input").value = cityName();
     if (state.tab === "catalog") loadCatalog();
@@ -603,6 +684,7 @@
     clearTimeout(refreshTimer);
     const seq = ++rt.reqSeq;
     rt.diagnosis = null;
+    rt.excludedDiag = null;
     if (!state.items.length) {
       rt.result = null;
       rt.error = null;
@@ -618,7 +700,6 @@
       const raw = await Data.optimize();
       if (seq !== rt.reqSeq) return;
       rt.result = normResult(raw);
-      // ако всички вериги са скрити (напр. от друг град) — нулираме филтъра
       const names = rt.result.rankings.map((r) => r.chain_name);
       if (
         names.length &&
@@ -628,6 +709,9 @@
           (c) => !names.includes(c),
         );
         saveState();
+      }
+      if (rt.trendChain !== "market" && !names.includes(rt.trendChain)) {
+        rt.trendChain = names.length > 1 ? "market" : names[0] || "market";
       }
     } catch (err) {
       if (seq !== rt.reqSeq) return;
@@ -655,6 +739,26 @@
     renderCompare();
   }
 
+  async function diagnoseExcludedChains() {
+    if (rt.excludedDiagLoading || !state.items.length) return;
+    const seq = rt.reqSeq;
+    rt.excludedDiagLoading = true;
+    renderChainFilter();
+    const cats = state.items.map((i) => i.category_id);
+    const res = await mapLimit(cats, 4, (id) =>
+      Data.products({ ekatte_code: state.ekatte_code, category_id: id }),
+    );
+    if (seq !== rt.reqSeq) return;
+    rt.excludedDiagLoading = false;
+    rt.excludedDiag = cats
+      .map((id, i) => ({
+        id,
+        chains: Array.from(new Set((res[i] || []).map((p) => p.chain_name))),
+      }))
+      .sort((a, b) => a.chains.length - b.chains.length);
+    renderChainFilter();
+  }
+
   async function loadTrend() {
     const token = ++rt.trendToken;
     const v = rt.view;
@@ -662,12 +766,44 @@
       rt.trend = null;
       return;
     }
+    if (
+      rt.trendChain !== "market" &&
+      !v.rk.some((r) => r.chain_name === rt.trendChain)
+    ) {
+      rt.trendChain = v.rk.length > 1 ? "market" : v.best.chain_name;
+    }
+    const effectiveMode =
+      rt.trendChain === "market" && v.rk.length === 1
+        ? v.best.chain_name
+        : rt.trendChain;
+
     rt.trend = { state: "loading" };
     renderTrend();
-    const items = v.best.matched_items;
-    const hs = await mapLimit(items, 5, (it) => getHistory(it.product_id));
-    if (token !== rt.trendToken) return;
-    rt.trend = computeTrend(items, hs);
+
+    if (effectiveMode === "market") {
+      // Вземаме историята за продуктите от първите до 6 видими вериги за пазарно средно
+      const sampleRankings = v.rk.slice(0, 6);
+      const uniqueIds = Array.from(
+        new Set(
+          sampleRankings.flatMap((r) =>
+            r.matched_items.map((it) => it.product_id),
+          ),
+        ),
+      );
+      const hs = await mapLimit(uniqueIds, 6, (pid) => getHistory(pid));
+      if (token !== rt.trendToken) return;
+      const histByProd = new Map();
+      uniqueIds.forEach((pid, i) => {
+        if (hs[i]) histByProd.set(pid, hs[i]);
+      });
+      rt.trend = computeMarketTrend(v, histByProd);
+    } else {
+      const target = v.rk.find((r) => r.chain_name === effectiveMode) || v.best;
+      const items = target.matched_items;
+      const hs = await mapLimit(items, 5, (it) => getHistory(it.product_id));
+      if (token !== rt.trendToken) return;
+      rt.trend = computeTrend(items, hs, target.chain_name);
+    }
     renderTrend();
   }
 
@@ -690,7 +826,7 @@
       ? `${countLabel(n, "продукт", "продукта")} в кошницата`
       : "Кошницата е празна";
     $("#mobile-total").textContent = rt.view
-      ? `Най-евтино: ${eur(rt.view.best.total_cost)} · ${rt.view.best.chain_name}`
+      ? `Най-евтино: ${eur(rt.view.best.total_cost)} · ${displayChain(rt.view.best.chain_name)}`
       : "Добави продукти";
   }
 
@@ -701,11 +837,11 @@
       rt.mode === "live"
         ? "Live API"
         : rt.offline
-          ? "Офлайн · демо данни"
+          ? "Офлайн · демо"
           : "Демо данни";
     b.title =
       rt.mode === "live"
-        ? "Свързан с бекенда. Кликни за повторна проверка."
+        ? "Свързан с реалните данни от КЗП. Кликни за проверка."
         : "Показваме примерни данни. Кликни, за да опиташ връзка с API-то.";
   }
 
@@ -718,6 +854,22 @@
       : "Все още е празна";
 
     const ul = $("#basket-items");
+    const activeQtyEl =
+      document.activeElement &&
+      ul.contains(document.activeElement) &&
+      document.activeElement.matches("[data-qty-input]")
+        ? document.activeElement
+        : null;
+    const preservedFocus = activeQtyEl
+      ? {
+          cat: activeQtyEl.closest("[data-cat]").dataset.cat,
+          val: activeQtyEl.value,
+          prev: activeQtyEl.dataset.prev || "",
+          start: activeQtyEl.selectionStart,
+          end: activeQtyEl.selectionEnd,
+        }
+      : null;
+
     if (!items.length) {
       ul.innerHTML = `<li class="b-empty"><div class="b-empty-ic">${icon("cart", 26)}</div><strong>Кошницата е празна</strong><p>Потърси продукт по-горе или започни с готова кошница.</p><button type="button" class="btn btn-soft btn-sm" data-open-baskets>Готови кошници</button></li>`;
     } else {
@@ -728,19 +880,40 @@
             ? cheapestFor(rt.view.table, it.category_id)
             : null;
           const meta = ch
-            ? `най-евтино <b>${eur(ch.unit)}</b> · ${esc(ch.chain)}`
+            ? `най-евтино <b>${eur(ch.unit)}</b> · ${esc(displayChain(ch.chain))}`
             : esc(cat ? cat.group : "");
           return `<li class="b-item" data-cat="${it.category_id}">
             <div class="b-main"><span class="b-name" title="${esc(catName(it.category_id))}">${esc(catName(it.category_id))}</span><span class="b-meta">${meta}</span></div>
-            <div class="qty" role="group" aria-label="Количество">
+            <div class="qty" role="group" aria-label="Количество за ${esc(catName(it.category_id))}">
               <button type="button" class="qty-btn" data-act="dec" aria-label="Намали количеството">−</button>
-              <span class="qty-val" aria-live="polite">${it.qty}</span>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" class="qty-val" data-qty-input value="${it.qty}" maxlength="2" aria-label="Количество за ${esc(catName(it.category_id))}" title="Кликни, за да въведеш количество (1–99)" />
               <button type="button" class="qty-btn" data-act="inc" aria-label="Увеличи количеството">+</button>
             </div>
-            <button type="button" class="icon-btn sm danger" data-act="remove" aria-label="Премахни ${esc(catName(it.category_id))}">${icon("x", 14)}</button>
+            <button type="button" class="icon-btn sm danger" data-act="remove" aria-label="Премахни ${esc(catName(it.category_id))}" title="Премахни">${icon("x", 15)}</button>
           </li>`;
         })
         .join("");
+
+      if (preservedFocus) {
+        const nextInp = ul.querySelector(
+          `[data-cat="${CSS.escape(preservedFocus.cat)}"] [data-qty-input]`,
+        );
+        if (nextInp) {
+          nextInp.value = preservedFocus.val;
+          nextInp.dataset.prev = preservedFocus.prev;
+          nextInp.focus({ preventScroll: true });
+          try {
+            if (preservedFocus.start != null && preservedFocus.end != null) {
+              nextInp.setSelectionRange(
+                preservedFocus.start,
+                preservedFocus.end,
+              );
+            }
+          } catch (_) {
+            /* ignore */
+          }
+        }
+      }
     }
     renderQuickChips();
     renderBudget();
@@ -749,23 +922,26 @@
 
   function renderQuickChips() {
     const inBasket = new Set(state.items.map((i) => i.category_id));
-    let cats = POPULAR_IDS.filter(
-      (id) => rt.catById.has(id) && !inBasket.has(id),
-    )
-      .slice(0, 5)
+    let cats = (rt.popularIds || [])
+      .filter((id) => rt.catById.has(id) && !inBasket.has(id))
+      .slice(0, 4)
       .map((id) => rt.catById.get(id));
-    if (cats.length < 3) {
+    if (cats.length < 4) {
       const extra = rt.meta.categories
-        .filter((c) => !inBasket.has(c.id) && !cats.includes(c))
-        .slice(0, 5 - cats.length);
+        .filter(
+          (c) =>
+            !inBasket.has(c.id) &&
+            !cats.includes(c) &&
+            !norm(c.name).includes("оцет"),
+        )
+        .slice(0, 4 - cats.length);
       cats = cats.concat(extra);
     }
     $("#quick-chips").innerHTML = cats.length
-      ? `<span class="chips-label">Предложения:</span>` +
-        cats
+      ? cats
           .map(
             (c) =>
-              `<button type="button" class="chip" data-quick="${c.id}">${icon("plus", 12)} ${esc(shortName(c))}</button>`,
+              `<button type="button" class="chip" data-quick="${c.id}" title="Добави: ${esc(c.name)}">${icon("plus", 13)} ${esc(smartShortName(c))}</button>`,
           )
           .join("")
       : "";
@@ -773,7 +949,9 @@
 
   function renderBudget() {
     const meter = $("#budget-meter");
+    const sumVal = $("#budget-summary-val");
     const b = state.budget;
+    if (sumVal) sumVal.textContent = b ? eur(b) : "";
     if (!b || !rt.view) {
       meter.hidden = true;
       return;
@@ -803,14 +981,13 @@
     }
     animateMoney(el, prevSide, v.best.total_cost);
     prevSide = v.best.total_cost;
-    $("#sidebar-lowest-chain").textContent = `в ${v.best.chain_name}`;
+    $("#sidebar-lowest-chain").textContent =
+      `в ${displayChain(v.best.chain_name)}`;
   }
 
   /* ───────────────────────── рендер: сравнение ───────────────────────── */
   function emptyStateHTML() {
-    const tpl = TEMPLATES.filter(
-      (t) => t.items.filter(([id]) => rt.catById.has(id)).length >= 2,
-    ).slice(0, 3);
+    const tpl = (rt.templates || []).slice(0, 3);
     return `<div class="state-card">
       <div class="state-ic">${icon("cart", 30)}</div>
       <h3>Започни със своята кошница</h3>
@@ -833,33 +1010,36 @@
     const diag = rt.diagnosis;
     let body = "";
     if (diag) {
+      const maxCh = Math.max(1, ...diag.map((x) => x.chains.length));
       const rows = diag
         .map((d) => {
-          const bad =
-            d.chains.length < Math.max(...diag.map((x) => x.chains.length));
-          return `<div class="diag-row${bad ? " bad" : ""}"><span><b>${esc(catName(d.id))}</b><br><small>${d.chains.length ? "Налично във: " + esc(d.chains.join(", ")) : "Няма данни в това населено място"}</small></span><button type="button" class="btn btn-ghost btn-sm" data-remove-cat="${d.id}">Премахни</button></div>`;
+          const bad = d.chains.length < maxCh || d.chains.length === 0;
+          const chainNames = d.chains.map(displayChain).join(", ");
+          return `<div class="diag-row${bad ? " bad" : ""}"><span><b>${esc(catName(d.id))}</b><br><small>${d.chains.length ? `Налично в ${countLabel(d.chains.length, "верига", "вериги")}: ${esc(chainNames)}` : "Няма данни в това населено място"}</small></span><button type="button" class="btn btn-ghost btn-sm" data-remove-cat="${d.id}">Премахни</button></div>`;
         })
         .join("");
       body = `<div class="diag">${rows}</div>`;
     } else if (rt.mode === "live") {
-      body = `<div class="diag"><div class="skel" style="height:44px"></div><div class="skel" style="height:44px"></div></div>`;
+      body = `<div class="diag"><div class="skel" style="height:48px"></div><div class="skel" style="height:48px"></div></div>`;
     }
     return `<div class="state-card warn">
       <div class="state-ic">${icon("info", 30)}</div>
       <h3>Няма верига с всички избрани продукти</h3>
-      <p>Показваме само вериги, които имат данни за <b>всеки</b> продукт в кошницата в ${esc(cityName())}. Премахни продукта, който липсва, или опитай с друго населено място.</p>
+      <p>Показваме само вериги, които имат данни за <b>всеки</b> продукт в кошницата в ${esc(cityName())}. Премахни продукта с най-малко покритие или опитай с друг град.</p>
       ${body}
     </div>`;
   }
 
   function heroHTML(v) {
     const { best, worst } = v;
+    const bestLabel = displayChain(best.chain_name);
+    const worstLabel = displayChain(worst.chain_name);
     const spread = worst.total_cost - best.total_cost;
     const promoSave = state.include_promos ? best.total_promo_savings : 0;
     const chips = [];
     if (v.rk.length > 1)
       chips.push(
-        `<span class="hchip">${icon("trend-down", 14)} ${eur(spread)} по-евтино от ${esc(worst.chain_name)}</span>`,
+        `<span class="hchip">${icon("trend-down", 14)} ${eur(spread)} по-евтино от ${esc(worstLabel)}</span>`,
       );
     if (promoSave > 0.004)
       chips.push(
@@ -887,13 +1067,13 @@
         : `<aside class="hero-side">
             <span class="hero-side-label">${icon("sparkles", 14)} Умен план</span>
             <div class="hero-side-big">Всичко на едно място</div>
-            <p class="hero-side-sub">Разделянето между магазини не спестява повече от ${esc(best.chain_name)}.</p>
+            <p class="hero-side-sub">Разделянето между магазини не спестява повече от ${esc(bestLabel)}.</p>
             <button type="button" class="btn btn-white btn-sm" data-goto="plan">Към списъка ${icon("arrow-right", 14)}</button>
           </aside>`;
     return `<section class="hero">
       <div class="hero-main">
         <span class="eyebrow">${icon("pin", 14)} Най-евтина кошница · ${esc(cityName())}</span>
-        <div class="hero-chain">${avatar(best.chain_name)}<h2>${esc(best.chain_name)}</h2></div>
+        <div class="hero-chain">${avatar(best.chain_name)}<h2${chainTitleAttr(best.chain_name)}>${esc(bestLabel)}</h2></div>
         <div class="hero-total" id="hero-total">${eur(best.total_cost)}</div>
         <div class="hero-chips">${chips.join("")}</div>
       </div>
@@ -940,7 +1120,7 @@
     renderKpis(v);
     renderChainFilter();
     $("#results-message").textContent =
-      `Класация на ${countLabel(v.rk.length, "верига", "вериги")} за ${countLabel(state.items.length, "продукт", "продукта")} в ${cityName()}.`;
+      `Класация на ${countLabel(v.rk.length, "верига", "вериги")} с пълната кошница (${countLabel(state.items.length, "продукт", "продукта")}) в ${cityName()}.`;
     $$("#rank-seg [data-rank]").forEach((b) =>
       b.setAttribute("aria-pressed", String(b.dataset.rank === rt.rankView)),
     );
@@ -951,6 +1131,7 @@
 
   function renderKpis(v) {
     const best = v.best;
+    const bestLabel = displayChain(best.chain_name);
     const items = best.matched_items;
     const nPromo = items.filter(hasPromo).length;
     const save = state.include_promos ? best.total_promo_savings : 0;
@@ -963,8 +1144,8 @@
         !state.include_promos
           ? "Промоциите са изключени от сметката"
           : nPromo
-            ? `${nPromo} от ${countLabel(items.length, "продукт", "продукта")} в ${esc(best.chain_name)} са в промоция`
-            : `Няма активни промоции в ${esc(best.chain_name)}`
+            ? `${nPromo} от ${countLabel(items.length, "продукт", "продукта")} в ${esc(bestLabel)} са в промоция`
+            : `Няма активни промоции в ${esc(bestLabel)}`
       }</p>`;
 
     const p1 = v.plans[1];
@@ -978,7 +1159,7 @@
           ? "Нужни са поне 2 вериги с всички продукти"
           : g3 - g2 > 0.009
             ? `С 3 магазина — още ${eur(g3 - g2)} по-евтино`
-            : `Спрямо всичко от ${esc(best.chain_name)}`
+            : `Спрямо всичко от ${esc(bestLabel)}`
       }</p>`;
   }
 
@@ -989,29 +1170,58 @@
       rt.mode === "live"
         ? rt.meta.chains.filter((c) => !names.includes(c))
         : [];
-    $("#chain-filter").innerHTML =
-      `<span class="chips-label">Вериги:</span>` +
-      names
-        .map(
-          (n) =>
-            `<button type="button" class="chip ${ex.has(n) ? "" : "on"}" data-chain="${esc(n)}" aria-pressed="${!ex.has(n)}">${avatar(n)} ${esc(n)}</button>`,
-        )
-        .join("") +
-      missing
-        .map(
-          (n) =>
-            `<button type="button" class="chip" disabled title="Липсват данни за част от продуктите">${avatar(n)} ${esc(n)}</button>`,
-        )
-        .join("");
-    $("#excluded-note").innerHTML = missing.length
-      ? `<div class="note">${icon("info", 16)}<span>Не са включени: <b>${esc(missing.join(", "))}</b> — във веригата липсват данни за част от продуктите в кошницата.</span></div>`
+
+    const activeChips = names
+      .map((n) => {
+        const isOn = !ex.has(n);
+        const clean = displayChain(n);
+        return `<button type="button" class="chip ${isOn ? "on" : "chip-off"}" data-chain="${esc(n)}" aria-pressed="${isOn}"${chainTitleAttr(n)}>${avatar(n)}<span>${esc(clean)}</span>${isOn ? `<span class="chip-check">${icon("check", 13)}</span>` : ""}</button>`;
+      })
+      .join("");
+
+    const missingPill = missing.length
+      ? `<button type="button" class="chip chip-muted" id="toggle-excluded-chains" aria-expanded="${rt.excludedOpen}" aria-controls="excluded-note">${icon("info", 14)}<span>Още ${countLabel(missing.length, "верига", "вериги")} без пълната кошница</span>${icon(rt.excludedOpen ? "chevron-up" : "chevron-down", 14)}</button>`
       : "";
+
+    $("#chain-filter").innerHTML =
+      `<span class="chips-label">Вериги:</span>${activeChips}${missingPill}`;
+
+    const noteEl = $("#excluded-note");
+    if (!missing.length || !rt.excludedOpen) {
+      noteEl.innerHTML = "";
+      return;
+    }
+
+    let diagHtml = "";
+    if (rt.excludedDiagLoading) {
+      diagHtml = `<div class="excluded-diag"><div class="skel" style="height:40px"></div><div class="skel" style="height:40px"></div></div>`;
+    } else if (rt.excludedDiag) {
+      const totalChains = Math.max(1, rt.meta.chains.length);
+      diagHtml = `<div class="excluded-diag">${rt.excludedDiag
+        .map((d) => {
+          const low = d.chains.length <= names.length;
+          return `<div class="diag-row${low ? " bad" : ""}"><span><b>${esc(catName(d.id))}</b><br><small>Налично в ${d.chains.length} от ${totalChains} вериги в ${esc(cityName())}</small></span><button type="button" class="btn btn-ghost btn-sm" data-remove-cat="${d.id}">Премахни</button></div>`;
+        })
+        .join("")}</div>`;
+    }
+
+    noteEl.innerHTML = `<div class="excluded-panel">
+      <div class="excluded-head">
+        <p>Класацията включва само вериги, които предлагат <b>всеки</b> продукт от кошницата в ${esc(cityName())}, за да е честно сравнението. Следните ${countLabel(missing.length, "верига няма", "вериги нямат")} поне един от избраните продукти:</p>
+        ${!rt.excludedDiag && !rt.excludedDiagLoading ? `<button type="button" class="btn btn-soft btn-sm" data-diagnose-excluded>${icon("search", 14)} Виж кои продукти липсват</button>` : ""}
+      </div>
+      <div class="excluded-tags">
+        ${missing.map((n) => `<span class="excluded-tag"${chainTitleAttr(n)}>${esc(displayChain(n))}</span>`).join("")}
+      </div>
+      ${diagHtml}
+    </div>`;
   }
 
   function rankListHTML(v) {
     const max = v.worst.total_cost || 1;
     return v.rk
       .map((r, idx) => {
+        const clean = displayChain(r.chain_name);
         const delta = r.total_cost - v.best.total_cost;
         const open = rt.openTouched
           ? rt.openChains.has(r.chain_name)
@@ -1030,7 +1240,7 @@
           <summary class="rank-row">
             <span class="rank-pos">${idx === 0 ? "★" : idx + 1}</span>
             ${avatar(r.chain_name)}
-            <span class="rank-name"><b>${esc(r.chain_name)}</b><small>${idx === 0 ? "Най-евтина" : `+${eur(delta)} спрямо най-евтината`}${state.include_promos && r.total_promo_savings > 0.004 ? ` · промоции −${eur(r.total_promo_savings)}` : ""}</small></span>
+            <span class="rank-name"><b${chainTitleAttr(r.chain_name)}>${esc(clean)}</b><small>${idx === 0 ? "Най-евтина" : `+${eur(delta)} спрямо най-евтината`}${state.include_promos && r.total_promo_savings > 0.004 ? ` · промоции −${eur(r.total_promo_savings)}` : ""}</small></span>
             <span class="rank-bar"><i style="width:${width}%"></i></span>
             <span class="rank-total">${eur(r.total_cost)}</span>
             <span class="rank-chev">${icon("chevron-down", 18)}</span>
@@ -1046,7 +1256,7 @@
     const head = v.rk
       .map(
         (r) =>
-          `<th scope="col"><span class="chain-head">${avatar(r.chain_name)}<span>${esc(r.chain_name)}</span></span></th>`,
+          `<th scope="col"><span class="chain-head"${chainTitleAttr(r.chain_name)}>${avatar(r.chain_name)}<span>${esc(displayChain(r.chain_name))}</span></span></th>`,
       )
       .join("");
     const body = rows
@@ -1084,49 +1294,91 @@
 
   function renderTrend() {
     const v = rt.view;
-    if (!v) return;
+    const card = $("#trend-card");
+    if (!v) {
+      if (card) card.hidden = true;
+      return;
+    }
     const t = rt.trend;
     const kpi = $("#kpi-trend");
-    const card = $("#trend-card");
-    const label = `<span class="kpi-label">${icon("trend-up", 15)} Лична инфлация · 30 дни</span>`;
-    const head = (extra) =>
-      `<div class="panel-head"><div><h2>Какво се промени за 30 дни</h2><p class="muted">Базови цени (без промоции) на продуктите в ${esc(v.best.chain_name)}.</p></div>${extra || ""}</div>`;
+    const spanText =
+      t && t.spanDays
+        ? `${t.spanDays} ${plural(t.spanDays, "ден", "дни")}`
+        : "30 дни";
+    const scopeName =
+      rt.trendChain === "market" && v.rk.length > 1
+        ? "средно за пазара"
+        : `в ${displayChain(rt.trendChain === "market" ? v.best.chain_name : rt.trendChain)}`;
+
+    const selectorHtml =
+      v.rk.length > 1
+        ? `<select id="trend-chain-select" class="trend-select" aria-label="Верига за ценовия тренд">
+            <option value="market"${rt.trendChain === "market" ? " selected" : ""}>Средно за пазара (${v.rk.length} вериги)</option>
+            ${v.rk
+              .map(
+                (r) =>
+                  `<option value="${esc(r.chain_name)}"${rt.trendChain === r.chain_name ? " selected" : ""}>${esc(displayChain(r.chain_name))}</option>`,
+              )
+              .join("")}
+          </select>`
+        : "";
+
+    const label = `<span class="kpi-label">${icon("trend-up", 15)} Промяна на цените · ${spanText}</span>`;
 
     if (!t || t.state === "loading") {
       kpi.innerHTML = `${label}<div class="skel"></div><div class="skel" style="width:60%"></div>`;
-      card.innerHTML =
-        head() +
-        `<div class="skel skel-row"></div><div class="skel skel-row"></div>`;
+      card.hidden = false;
+      card.innerHTML = `<div class="panel-head"><div><h2>Какво се промени</h2><p class="muted">Зареждане на ценовата динамика…</p></div></div><div class="skel skel-row"></div><div class="skel skel-row"></div>`;
       return;
     }
-    if (t.state === "empty") {
-      kpi.innerHTML = `${label}<div class="kpi-row"><strong class="kpi-value">—</strong></div><p class="kpi-sub">Няма достатъчно история за тези продукти</p>`;
-      card.innerHTML =
-        head() +
-        `<div class="state-inline">Все още няма достатъчно данни за ценова история на продуктите в кошницата.</div>`;
+
+    if (t.state === "single_day" || t.state === "empty") {
+      // Грациозно скриваме празния панел, вместо да показваме празна кутия
+      card.hidden = true;
+      kpi.innerHTML = `<span class="kpi-label">${icon("trend-up", 15)} Промяна на цените</span>
+        <div class="kpi-row"><strong class="kpi-value">Днешни цени</strong><span class="kpi-chip">Следим</span></div>
+        <p class="kpi-sub">${
+          t.state === "single_day"
+            ? "Базата има данни само за 1 ден — при следващото обновяване тук ще видиш промяната."
+            : "Все още няма натрупана история за избраните продукти."
+        }</p>`;
       return;
     }
+
+    card.hidden = false;
     const up = t.pct > 0.0005;
     const down = t.pct < -0.0005;
     kpi.innerHTML = `${label}
       <div class="kpi-row"><strong class="kpi-value ${up ? "warn" : down ? "good" : ""}">${fmtPct(t.pct)}</strong><span class="kpi-chip ${up ? "warn" : down ? "good" : ""}">${signedEur(t.delta)}</span></div>
-      <p class="kpi-sub">Кошницата в ${esc(v.best.chain_name)} спрямо преди месец</p>${sparkline(t.series, up)}`;
+      <p class="kpi-sub">Кошницата ${esc(scopeName)} за ${spanText}</p>${sparkline(t.series, up)}`;
+
     const rows = t.rows.slice(0, 6);
     card.innerHTML =
-      head(
-        `<span class="kpi-chip ${up ? "warn" : down ? "good" : ""}">${fmtPct(t.pct)} общо · ${signedEur(t.delta)}</span>`,
-      ) +
+      `<div class="panel-head">
+        <div>
+          <h2>Какво се промени за ${spanText}</h2>
+          <p class="muted">Базови цени (без промоции) ${esc(scopeName)}. Кликни продукт за графика.</p>
+        </div>
+        <div class="trend-controls">
+          ${selectorHtml}
+          <span class="kpi-chip ${up ? "warn" : down ? "good" : ""}">${fmtPct(t.pct)} · ${signedEur(t.delta)}</span>
+        </div>
+      </div>` +
       `<div class="trend-list">${rows
         .map(
           (r) =>
-            `<div class="trend-row"><span class="t-name" title="${esc(r.name)}">${esc(r.name)}</span><span class="t-prices">${eur(r.then)} → ${eur(r.now)}</span><span class="delta ${r.pct > 0.0005 ? "up" : r.pct < -0.0005 ? "down" : ""}">${fmtPct(r.pct)}</span></div>`,
+            `<button type="button" class="trend-row" data-hist="${esc(r.product_id)}" data-chain="${esc(r.chain_name)}" data-cat="${r.category_id}" data-name="${esc(r.name)}">
+              <span class="t-name" title="${esc(r.name)}">${esc(r.name)}</span>
+              <span class="t-prices">${eur(r.then)} → ${eur(r.now)}</span>
+              <span class="delta ${r.pct > 0.0005 ? "up" : r.pct < -0.0005 ? "down" : ""}">${fmtPct(r.pct)}</span>
+            </button>`,
         )
         .join("")}</div>` +
       (t.rows.length > 6
         ? `<p class="muted" style="margin-top:10px">и още ${t.rows.length - 6} продукта с по-малка промяна</p>`
         : "") +
       (t.covered < t.total
-        ? `<p class="muted" style="margin-top:10px">Историята покрива ${t.covered} от ${t.total} продукта.</p>`
+        ? `<p class="muted" style="margin-top:8px">Историята покрива ${t.covered} от ${t.total} продукта.</p>`
         : "");
   }
 
@@ -1165,7 +1417,7 @@
       return `<button type="button" class="plan-opt${k === sel ? " on" : ""}" role="radio" aria-checked="${k === sel}" data-k="${k}">
         <span class="po-k">${countLabel(k, "магазин", "магазина")}</span>
         <strong class="po-v">${eur(p.total)}</strong>
-        <span class="po-d${gain > 0.009 ? " save" : ""}">${gain > 0.009 ? `−${eur(gain)} · ` : ""}${esc(p.stores.map((s) => s.chain).join(" + "))}</span>
+        <span class="po-d${gain > 0.009 ? " save" : ""}">${gain > 0.009 ? `−${eur(gain)} · ` : ""}${esc(p.stores.map((s) => displayChain(s.chain)).join(" + "))}</span>
       </button>`;
     }).join("");
 
@@ -1176,7 +1428,7 @@
           remaining += it.line_total;
       }),
     );
-    sum.innerHTML = `Общо <b>${eur(plan.total)}</b> в ${countLabel(plan.stores.length, "магазин", "магазина")} · спестяваш <b>${eur(v.worst.total_cost - plan.total)}</b> спрямо ${esc(v.worst.chain_name)}${
+    sum.innerHTML = `Общо <b>${eur(plan.total)}</b> в ${countLabel(plan.stores.length, "магазин", "магазина")} · спестяваш <b>${eur(v.worst.total_cost - plan.total)}</b> спрямо ${esc(displayChain(v.worst.chain_name))}${
       remaining < plan.total - 0.004
         ? ` · остава за купуване <b>${eur(remaining)}</b>`
         : ""
@@ -1184,6 +1436,7 @@
 
     listsEl.innerHTML = plan.stores
       .map((s) => {
+        const clean = displayChain(s.chain);
         const done = s.items.filter(
           (it) => state.checked[checkKey(it.chain, it.category_id)],
         ).length;
@@ -1193,14 +1446,14 @@
             const isDone = !!state.checked[key];
             const promo = hasPromo(it);
             return `<li class="check${isDone ? " done" : ""}"><label>
-              <input type="checkbox" data-check="${esc(key)}"${isDone ? " checked" : ""}><span class="box">${icon("check", 13)}</span>
+              <input type="checkbox" data-check="${esc(key)}"${isDone ? " checked" : ""}><span class="box">${icon("check", 14)}</span>
               <span class="c-name"><b>${it.qty}×</b> ${esc(it.product_name)}</span>
               <span class="c-price">${promo ? `<s>${eur(it.unit_regular_price * it.qty)}</s>` : ""}<span class="${promo ? "is-promo" : ""}">${eur(it.line_total)}</span></span>
             </label></li>`;
           })
           .join("");
         return `<article class="store-card">
-          <div class="store-head">${avatar(s.chain)}<div class="store-title"><h3>${esc(s.chain)}</h3><span>${countLabel(s.items.length, "продукт", "продукта")} · ${done}/${s.items.length} отметнати</span></div><strong class="store-total">${eur(s.subtotal)}</strong></div>
+          <div class="store-head">${avatar(s.chain)}<div class="store-title"><h3${chainTitleAttr(s.chain)}>${esc(clean)}</h3><span>${countLabel(s.items.length, "продукт", "продукта")} · ${done}/${s.items.length} отметнати</span></div><strong class="store-total">${eur(s.subtotal)}</strong></div>
           <div class="progress"><i style="width:${(done / s.items.length) * 100}%"></i></div>
           <ul class="checklist">${lis}</ul>
         </article>`;
@@ -1214,7 +1467,7 @@
     if (!plan) return "";
     const lines = [`🛒 Списък за пазаруване — ${cityName()}`, ""];
     plan.stores.forEach((s) => {
-      lines.push(`📍 ${s.chain} — ${eur(s.subtotal)}`);
+      lines.push(`📍 ${displayChain(s.chain)} — ${eur(s.subtotal)}`);
       s.items.forEach((it) =>
         lines.push(
           `  ${state.checked[checkKey(it.chain, it.category_id)] ? "☑" : "☐"} ${it.qty}× ${it.product_name} — ${eur(it.line_total)}`,
@@ -1264,7 +1517,10 @@
     rows.forEach((product) => {
       const id = Number(product.category_id);
       if (!Number.isFinite(id)) return;
-      catalog.productSearchText.set(product, norm(product.name));
+      catalog.productSearchText.set(
+        product,
+        norm(`${product.name} ${displayChain(product.chain_name)}`),
+      );
       if (!byCategory.has(id)) {
         byCategory.set(id, {
           id,
@@ -1290,6 +1546,13 @@
   }
 
   function renderCatalog() {
+    const sub = $("#catalog-subtitle");
+    if (sub) {
+      sub.textContent =
+        rt.mode === "live"
+          ? "Сравни цените на различните марки в една продуктова група."
+          : "Сравни различни марки в една продуктова група (демо режим с примерни цени).";
+    }
     const count = $("#catalog-count");
     const grid = $("#catalog-grid");
     const more = $("#catalog-more");
@@ -1301,27 +1564,28 @@
     categorySelect.innerHTML =
       '<option value="all">Всички продуктови групи</option>' +
       availableGroups
-        .map((group) => '<option value="' + esc(group) + '">' + esc(group) + "</option>")
+        .map(
+          (group) =>
+            '<option value="' + esc(group) + '">' + esc(group) + "</option>",
+        )
         .join("");
-    if (
-      catalog.group !== "all" &&
-      !availableGroups.includes(catalog.group)
-    ) {
+    if (catalog.group !== "all" && !availableGroups.includes(catalog.group)) {
       catalog.group = "all";
     }
     categorySelect.value = catalog.group;
 
     if (catalog.loading) {
       count.textContent = "Зареждане на продуктите за " + cityName() + "…";
-      grid.innerHTML = '<div class="skel" style="height:170px"></div>'.repeat(4);
+      grid.innerHTML = '<div class="skel" style="height:170px"></div>'.repeat(
+        4,
+      );
       more.hidden = true;
       return;
     }
     if (catalog.error) {
       count.textContent = "Каталогът не можа да се зареди";
       grid.innerHTML =
-        '<div class="state-inline">Не успяхме да заредим продуктите. Провери връзката с API-то и опитай отново.</div>' +
-        '<button type="button" class="btn btn-soft btn-sm" data-retry-catalog>Опитай отново</button>';
+        '<div class="state-inline">Не успяхме да заредим продуктите. Провери връзката с API-то и опитай отново.<div style="margin-top:12px"><button type="button" class="btn btn-soft btn-sm" data-retry-catalog>Опитай отново</button></div></div>';
       more.hidden = true;
       return;
     }
@@ -1374,11 +1638,9 @@
       "",
     );
     count.textContent =
-      groups.length +
-      (groups.length === 1 ? " продуктова група" : " продуктови групи") +
+      countLabel(groups.length, "продуктова група", "продуктови групи") +
       " · " +
-      itemCount +
-      (itemCount === 1 ? " предложение" : " предложения") +
+      countLabel(itemCount, "предложение", "предложения") +
       " · " +
       cityName() +
       (latestDate ? " · данни към " + latestDate : "");
@@ -1394,11 +1656,12 @@
     grid.innerHTML = visibleGroups
       .map((group) => {
         const low = group.lowest;
-        // Only render chains with offers for this product category.
-        const storeSort = catalog.storeSortByCategory.get(group.id) || "price-asc";
+        const storeSort =
+          catalog.storeSortByCategory.get(group.id) || "price-asc";
         const storesForGroup = Array.from(
           group.rows.reduce((byChain, product) => {
-            if (!byChain.has(product.chain_name)) byChain.set(product.chain_name, []);
+            if (!byChain.has(product.chain_name))
+              byChain.set(product.chain_name, []);
             byChain.get(product.chain_name).push(product);
             return byChain;
           }, new Map()),
@@ -1409,10 +1672,18 @@
           return { chain, offers, cheapest: Number(offers[0].effective_price) };
         });
         storesForGroup.sort((a, b) => {
-          if (storeSort === "name") return a.chain.localeCompare(b.chain, "bg");
+          if (storeSort === "name")
+            return displayChain(a.chain).localeCompare(
+              displayChain(b.chain),
+              "bg",
+            );
           const priceOrder = a.cheapest - b.cheapest;
-          const orderedPrice = storeSort === "price-desc" ? -priceOrder : priceOrder;
-          return orderedPrice || a.chain.localeCompare(b.chain, "bg");
+          const orderedPrice =
+            storeSort === "price-desc" ? -priceOrder : priceOrder;
+          return (
+            orderedPrice ||
+            displayChain(a.chain).localeCompare(displayChain(b.chain), "bg")
+          );
         });
         const storesExpanded = catalog.expandedChainGroups.has(group.id);
         const visibleStores = storesExpanded
@@ -1473,15 +1744,19 @@
                   '" aria-expanded="' +
                   String(expanded) +
                   '">' +
-                  (expanded ? "Покажи по-малко" : "Покажи още (" + hiddenCount + ")") +
+                  (expanded
+                    ? "Покажи по-малко"
+                    : "Покажи още (" + hiddenCount + ")") +
                   "</button>"
                 : "";
             return (
               '<section class="catalog-store">' +
-              '<div class="catalog-store-name"><h4>' +
+              '<div class="catalog-store-name"><h4' +
+              chainTitleAttr(chain) +
+              ">" +
               avatar(chain) +
               " " +
-              esc(chain) +
+              esc(displayChain(chain)) +
               "</h4></div>" +
               '<div class="catalog-store-offers">' +
               offersHtml +
@@ -1504,7 +1779,7 @@
                 : "Покажи още магазини (" + hiddenStoreCount + ")") +
               "</button>"
             : "";
-        const chainCount = new Set(group.rows.map((p) => p.chain_name)).size;
+        const chainCount = storesForGroup.length;
         const collapsed = catalog.collapsedGroups.has(group.id);
         return (
           '<article class="catalog-group">' +
@@ -1512,16 +1787,14 @@
           "<div><h3>" +
           esc(group.name) +
           '</h3><p class="muted">' +
-          group.rows.length +
-          (group.rows.length === 1 ? " предложение" : " предложения") +
+          countLabel(group.rows.length, "предложение", "предложения") +
           " в " +
-          chainCount +
-          (chainCount === 1 ? " верига" : " вериги") +
+          countLabel(chainCount, "верига", "вериги") +
           "</p></div>" +
           '<div class="catalog-best"><span>Най-евтин вариант</span><strong>' +
           eur(low.effective_price) +
           "</strong><small>" +
-          esc(low.chain_name) +
+          esc(displayChain(low.chain_name)) +
           " · " +
           esc(low.name) +
           "</small></div>" +
@@ -1530,10 +1803,10 @@
           '" aria-label="Сортирай магазините по най-ниската им цена">' +
           '<option value="price-asc"' +
           (storeSort === "price-asc" ? " selected" : "") +
-          '>Най-евтините първо</option>' +
+          ">Най-евтините първо</option>" +
           '<option value="price-desc"' +
           (storeSort === "price-desc" ? " selected" : "") +
-          '>Най-скъпите първо</option>' +
+          ">Най-скъпите първо</option>" +
           '<option value="name"' +
           (storeSort === "name" ? " selected" : "") +
           ">По име</option></select></label>" +
@@ -1569,20 +1842,22 @@
     hydrateIcons(grid);
     more.hidden = groups.length <= catalog.shown;
     if (!more.hidden) {
-      more.textContent =
-        "Покажи още (" + (groups.length - catalog.shown) + ")";
+      more.textContent = "Покажи още (" + (groups.length - catalog.shown) + ")";
     }
   }
+
   /* ───────────────────────── промоции ───────────────────────── */
   async function loadDeals() {
     const d = rt.deals;
     if (d.loading) return;
+    const token = ++d.token;
     d.loading = true;
     d.error = false;
     renderDeals();
     const city = state.ekatte_code;
     try {
       const rows = await Data.products({ ekatte_code: city, promo_only: true });
+      if (token !== d.token) return;
       if (city !== state.ekatte_code) {
         d.loading = false;
         loadDeals();
@@ -1600,6 +1875,7 @@
         });
       d.loaded = true;
     } catch (e) {
+      if (token !== d.token) return;
       console.error(e);
       d.error = true;
     }
@@ -1618,7 +1894,11 @@
     }
     if (d.query) {
       const q = norm(d.query);
-      list = list.filter((x) => norm(`${x.name} ${x.catName}`).includes(q));
+      list = list.filter((x) =>
+        norm(`${x.name} ${x.catName} ${displayChain(x.chain_name)}`).includes(
+          q,
+        ),
+      );
     }
     list = list.slice();
     if (d.sort === "abs") list.sort((a, b) => b.abs - a.abs);
@@ -1629,8 +1909,8 @@
   }
 
   function verifyBadge(st) {
-    if (st === "fake") return `${icon("alert", 13)} Съмнителна промоция`;
-    if (st === "ok") return `${icon("check", 13)} Без сигнал за манипулация`;
+    if (st === "fake") return `${icon("alert", 14)} Съмнителна промоция`;
+    if (st === "ok") return `${icon("check", 14)} Без сигнал за манипулация`;
     if (st === "none") return "";
     return `<span class="muted">проверка…</span>`;
   }
@@ -1642,12 +1922,13 @@
     const count = $("#deals-count");
 
     const names = Array.from(new Set(d.all.map((x) => x.chain_name)));
+    if (d.chain !== "all" && !names.includes(d.chain)) d.chain = "all";
     $("#deals-chains").innerHTML = names.length
       ? `<button type="button" class="chip ${d.chain === "all" ? "on" : ""}" data-dchain="all">Всички</button>` +
         names
           .map(
             (n) =>
-              `<button type="button" class="chip ${d.chain === n ? "on" : ""}" data-dchain="${esc(n)}">${avatar(n)} ${esc(n)}</button>`,
+              `<button type="button" class="chip ${d.chain === n ? "on" : ""}" data-dchain="${esc(n)}"${chainTitleAttr(n)}>${avatar(n)}<span>${esc(displayChain(n))}</span></button>`,
           )
           .join("")
       : "";
@@ -1679,7 +1960,7 @@
       .map((x, i) => {
         const st = d.verified.get(x.product_id);
         return `<article class="deal" data-deal="${esc(x.product_id)}" style="animation-delay:${Math.min(i, 11) * 25}ms">
-          <div class="deal-top">${avatar(x.chain_name)}<span class="deal-chain">${esc(x.chain_name)}</span><span class="deal-pct">−${Math.round(x.pct * 100)}%</span></div>
+          <div class="deal-top">${avatar(x.chain_name)}<span class="deal-chain"${chainTitleAttr(x.chain_name)}>${esc(displayChain(x.chain_name))}</span><span class="deal-pct">−${Math.round(x.pct * 100)}%</span></div>
           <h3 class="deal-name">${esc(x.name)}</h3>
           <p class="deal-cat">${esc(x.catName)}</p>
           <div class="deal-price"><strong>${eur(x.promo_price)}</strong><s>${eur(x.regular_price)}</s></div>
@@ -1698,16 +1979,19 @@
   async function verifyVisibleDeals() {
     const d = rt.deals;
     if (!d.loaded) return;
+    const token = d.token;
     const todo = filteredDeals()
       .slice(0, d.shown)
       .filter((x) => !d.verified.has(x.product_id));
     await mapLimit(todo, 3, async (x) => {
+      if (token !== d.token) return;
       let st = "none";
       try {
         const h = await getHistory(x.product_id);
+        if (token !== d.token) return;
         st = h ? (h.fake_discount_warning ? "fake" : "ok") : "none";
       } catch (_) {
-        return; // ще опитаме пак при следващо рисуване
+        return;
       }
       d.verified.set(x.product_id, st);
       const el = $(
@@ -1790,7 +2074,7 @@
         const available =
           (v && v.table.get(sel.cat) && v.table.get(sel.cat).has(n)) ||
           (h.focus && h.focus.chain_name === n);
-        return `<button type="button" class="chip ${n === sel.chain ? "on" : ""}" data-hchain="${esc(n)}"${available ? "" : " disabled"}>${avatar(n)} ${esc(n)}</button>`;
+        return `<button type="button" class="chip ${n === sel.chain && h.view === "single" ? "on" : ""}" data-hchain="${esc(n)}"${available ? "" : " disabled"}${chainTitleAttr(n)}>${avatar(n)}<span>${esc(displayChain(n))}</span></button>`;
       })
       .join("");
     $$("#h-range [data-range]").forEach((b) =>
@@ -1812,7 +2096,7 @@
       el.innerHTML = "";
       return;
     }
-    el.innerHTML = `<div class="focus-note"><span>${icon("info", 15)} Показан е продукт от промоциите: <b>${esc(f.name)}</b> · ${esc(f.chain_name)}</span>
+    el.innerHTML = `<div class="focus-note"><span>${icon("info", 15)} Показан е избран продукт: <b>${esc(f.name)}</b> · ${esc(displayChain(f.chain_name))}</span>
       <span class="chips">${f.category_id != null ? `<button type="button" class="btn btn-soft btn-sm" data-add-cat="${f.category_id}">${icon("plus", 14)} Добави в кошницата</button>` : ""}<button type="button" class="btn btn-ghost btn-sm" data-clear-focus>Покажи моята кошница</button></span></div>`;
   }
 
@@ -1830,8 +2114,8 @@
     const n = parseInt(m[1], 16);
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
   }
-  const stat = (label, val, sub, tone) =>
-    `<div class="stat"><div class="stat-label">${label}</div><div class="stat-val">${val}</div>${sub ? `<div class="stat-sub ${tone || ""}">${sub}</div>` : ""}</div>`;
+  const stat = (label, val, sub, tone, dotColor) =>
+    `<div class="stat"><div class="stat-label">${dotColor ? `<span class="stat-dot" style="background:${dotColor}"></span>` : ""}<span>${label}</span></div><div class="stat-val">${val}</div>${sub ? `<div class="stat-sub ${tone || ""}">${sub}</div>` : ""}</div>`;
 
   const fakeBandPlugin = {
     id: "fakeBand",
@@ -1842,15 +2126,15 @@
       const x1 = scales.x.getPixelForValue(opts.to);
       ctx.save();
       ctx.fillStyle = opts.fill;
-      ctx.fillRect(x0, chartArea.top, Math.max(3, x1 - x0), chartArea.height);
+      ctx.fillRect(x0, chartArea.top, Math.max(4, x1 - x0), chartArea.height);
       ctx.fillStyle = opts.text;
       ctx.font = "600 11px Inter, sans-serif";
       ctx.textBaseline = "top";
-      ctx.fillText(
-        opts.label,
-        Math.min(x0 + 6, chartArea.right - 190),
-        chartArea.top + 6,
+      const textX = Math.max(
+        chartArea.left + 6,
+        Math.min(x0 + 6, chartArea.right - 185),
       );
+      ctx.fillText(opts.label, textX, chartArea.top + 6);
       ctx.restore();
     },
   };
@@ -1858,6 +2142,8 @@
   function baseChartOptions() {
     const ink = cssVar("--ink");
     const bg = cssVar("--bg");
+    const fontScale =
+      currentFont === "xlarge" ? 14 : currentFont === "large" ? 13 : 12;
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -1867,11 +2153,11 @@
           position: "bottom",
           labels: {
             usePointStyle: true,
-            boxWidth: 8,
-            boxHeight: 8,
+            boxWidth: 9,
+            boxHeight: 9,
             padding: 16,
             color: cssVar("--ink-2"),
-            font: { weight: "600", size: 12 },
+            font: { weight: "600", size: fontScale },
           },
         },
         tooltip: {
@@ -1891,11 +2177,20 @@
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: cssVar("--muted"), maxTicksLimit: 8, maxRotation: 0 },
+          ticks: {
+            color: cssVar("--muted"),
+            maxTicksLimit: 8,
+            maxRotation: 0,
+            font: { size: fontScale - 1 },
+          },
         },
         y: {
           grid: { color: cssVar("--line") },
-          ticks: { color: cssVar("--muted"), callback: (val) => eur(val) },
+          ticks: {
+            color: cssVar("--muted"),
+            callback: (val) => eur(val),
+            font: { size: fontScale - 1 },
+          },
           grace: "8%",
         },
       },
@@ -1930,7 +2225,7 @@
       showEmpty(
         state.items.length
           ? "Няма данни за избрания продукт в тази верига."
-          : "Добави продукти в кошницата или избери промоция, за да видиш ценовата история.",
+          : 'Добави продукти в кошницата или избери продукт от <button type="button" class="btn btn-soft btn-sm" data-goto="catalog">Каталог</button> / <button type="button" class="btn btn-soft btn-sm" data-goto="deals">Промоции</button>.',
       );
       return;
     }
@@ -1940,7 +2235,7 @@
       );
       return;
     }
-    stats.innerHTML = `<div class="skel" style="height:66px;grid-column:1/-1"></div>`;
+    stats.innerHTML = `<div class="skel" style="height:68px;grid-column:1/-1"></div>`;
     const range = rt.history.range;
     Chart.defaults.font.family = '"Inter", system-ui, sans-serif';
 
@@ -1972,13 +2267,13 @@
           );
           const col = chainColor(x.chain);
           return {
-            label: x.chain,
+            label: displayChain(x.chain),
             data: dates.map((d) => (m.has(d) ? m.get(d) : null)),
             borderColor: col,
             backgroundColor: col,
-            borderWidth: 2.4,
-            pointRadius: 0,
-            pointHoverRadius: 4,
+            borderWidth: 2.6,
+            pointRadius: dates.length <= 7 ? 3 : 0,
+            pointHoverRadius: 5,
             stepped: "before",
             spanGaps: true,
           };
@@ -1997,10 +2292,11 @@
         stats.innerHTML = now
           .map((n, i) =>
             stat(
-              esc(n.chain),
+              esc(displayChain(n.chain)),
               eur(n.cur),
               n.promo ? "промоция" : "базова цена",
               i === 0 ? "good" : "",
+              chainColor(n.chain),
             ),
           )
           .join("");
@@ -2028,6 +2324,7 @@
       const a = analyzeHistory(h, range);
       const idx = [];
       for (let i = a.start; i < a.n; i++) idx.push(i);
+      const shownDays = idx.length;
 
       stats.innerHTML =
         stat(
@@ -2037,7 +2334,10 @@
           a.promoActive ? "good" : "",
         ) +
         stat("Базова цена", eur(a.regNow)) +
-        stat(`Най-ниска · ${range} дни`, eur(a.min)) +
+        stat(
+          `Най-ниска · ${shownDays} ${plural(shownDays, "ден", "дни")}`,
+          eur(a.min),
+        ) +
         stat(
           "Средна",
           eur(a.avg),
@@ -2048,9 +2348,10 @@
 
       if (h.fake_discount_warning) {
         alertEl.hidden = false;
+        const chLabel = displayChain(h.chain_name);
         $("#fakeDiscountText").textContent = a.hike
-          ? `Във верига ${h.chain_name} базовата цена на „${h.product_name}“ е била повишена от ${eur(a.hike.from)} на ${eur(a.hike.to)} през 7-те дни преди началото на промоцията (${eur(a.promoNow)}).`
-          : `Във верига ${h.chain_name} е засечено повишение на базовата цена на „${h.product_name}“ непосредствено преди промоцията.`;
+          ? `Във верига ${chLabel} базовата цена на „${h.product_name}“ е била повишена от ${eur(a.hike.from)} на ${eur(a.hike.to)} през 7-те дни преди началото на промоцията (${eur(a.promoNow)}).`
+          : `Във верига ${chLabel} е засечено повишение на базовата цена на „${h.product_name}“ непосредствено преди промоцията.`;
       } else {
         alertEl.hidden = true;
       }
@@ -2058,7 +2359,7 @@
       const vd = verdictFor(h, a);
       verdict.innerHTML = `<div class="verdict ${vd.tone}">${icon(vd.tone === "good" ? "check" : vd.tone === "warn" ? "alert" : "info", 20)}<div><strong>${esc(vd.title)}</strong><p>${esc(vd.text)}</p></div></div>`;
 
-      const accent = cssVar("--accent");
+      const good = cssVar("--good") || cssVar("--accent");
       const warn = cssVar("--warn");
       let band = {};
       if (h.fake_discount_warning && a.hike) {
@@ -2090,21 +2391,18 @@
               borderDash: [6, 4],
               borderWidth: 2,
               stepped: "before",
-              pointRadius: 0,
+              pointRadius: idx.length <= 7 ? 3 : 0,
               pointHoverRadius: 4,
             },
             {
               label: "Промоционална цена",
               data: idx.map((i) => h.promo_prices[i]),
-              borderColor: accent,
-              backgroundColor: rgba(
-                accent.length === 7 ? accent : "#10b981",
-                0.18,
-              ),
+              borderColor: good,
+              backgroundColor: rgba(good.length === 7 ? good : "#10b981", 0.18),
               borderWidth: 3,
               stepped: "before",
-              pointRadius: 2.5,
-              pointBackgroundColor: accent,
+              pointRadius: 3,
+              pointBackgroundColor: good,
               fill: "-1",
               spanGaps: false,
             },
@@ -2140,19 +2438,19 @@
     $("#saved-list").innerHTML = saved.length
       ? saved
           .map(
-            (
-              b,
-            ) => `<li class="saved-item" data-saved="${esc(b.id)}"><div class="si-main"><b>${esc(b.name)}</b><small>${countLabel(b.items.length, "продукт", "продукта")}${(rt.settlementByCode.get(b.ekatte_code) || {}).name ? " · " + esc(rt.settlementByCode.get(b.ekatte_code).name) : ""}</small></div>
+            (b) =>
+              `<li class="saved-item" data-saved="${esc(b.id)}"><div class="si-main"><b>${esc(b.name)}</b><small>${countLabel(b.items.length, "продукт", "продукта")}${(rt.settlementByCode.get(b.ekatte_code) || {}).name ? " · " + esc(rt.settlementByCode.get(b.ekatte_code).name) : ""}</small></div>
           <button type="button" class="btn btn-soft btn-sm" data-load-saved="${esc(b.id)}">Зареди</button>
           <button type="button" class="icon-btn sm danger" data-del-saved="${esc(b.id)}" aria-label="Изтрий ${esc(b.name)}">${icon("trash", 14)}</button></li>`,
           )
           .join("")
       : `<li class="muted">Още нямаш запазени кошници. Въведи име по-горе и натисни „Запази“.</li>`;
-    $("#template-grid").innerHTML = TEMPLATES.map((t) => {
-      const n = t.items.filter(([id]) => rt.catById.has(id)).length;
-      if (n < 2) return "";
-      return `<button type="button" class="template-card" data-template="${t.id}"><span class="tc-emoji">${t.emoji}</span><b>${esc(t.name)}</b><small>${esc(t.desc)}</small><small class="tc-count">${countLabel(n, "продукт", "продукта")}</small></button>`;
-    }).join("");
+    $("#template-grid").innerHTML = (rt.templates || [])
+      .map(
+        (t) =>
+          `<button type="button" class="template-card" data-template="${t.id}"><span class="tc-emoji">${t.emoji}</span><b>${esc(t.name)}</b><small>${esc(t.desc)}</small><small class="tc-count">${countLabel(t.items.length, "продукт", "продукта")}</small></button>`,
+      )
+      .join("");
   }
   function openBaskets() {
     renderBasketsDialog();
@@ -2167,12 +2465,9 @@
     else d.removeAttribute("open");
   }
   function loadTemplate(id) {
-    const t = TEMPLATES.find((x) => x.id === id);
+    const t = (rt.templates || []).find((x) => x.id === id);
     if (!t) return;
-    replaceBasket(
-      t.items.map(([c, q]) => ({ category_id: c, qty: q })),
-      `Заредена кошница: ${t.name}`,
-    );
+    replaceBasket(clone(t.items), `Заредена кошница: ${t.name}`);
     closeBaskets();
     setTab("compare");
   }
@@ -2207,6 +2502,7 @@
     const clean = cleanItems(items);
     if (!clean.length) return;
     state.items = clean;
+    state.seededMode = "custom";
     if (p.get("c")) state.ekatte_code = p.get("c");
     if (p.has("p")) state.include_promos = p.get("p") !== "0";
     saveState();
@@ -2223,7 +2519,9 @@
     const cols = v.rk.map((r) => r.chain_name);
     const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
     const num = (n) => Number(n).toFixed(2).replace(".", ",");
-    const rows = [["Продукт", "Количество"].concat(cols).map(q).join(";")];
+    const rows = [
+      ["Продукт", "Количество"].concat(cols.map(displayChain)).map(q).join(";"),
+    ];
     state.items.forEach((i) => {
       const byChain = v.table.get(i.category_id);
       if (!byChain) return;
@@ -2306,6 +2604,8 @@
     $("#city-input").value = cityName();
     $("#promo-toggle").checked = state.include_promos;
     $("#budget-input").value = state.budget ? String(state.budget) : "";
+    const budgetBox = $("#budget-box");
+    if (budgetBox && state.budget) budgetBox.open = true;
     $("#deals-sort").value = rt.deals.sort;
     $("#deals-only-basket").checked = rt.deals.onlyBasket;
   }
@@ -2320,12 +2620,14 @@
     if (ok) {
       sanitizeState({ items: true });
       syncControls();
+      rt.deals.token++;
       rt.deals.loaded = false;
+      rt.deals.loading = false;
       rt.deals.all = [];
       rt.deals.verified.clear();
-      catalog.loaded = false;
-      catalog.rows = [];
-      catalog.categoryIndex = [];
+      rt.excludedOpen = false;
+      rt.excludedDiag = null;
+      resetCatalogCache();
       if (state.tab === "catalog") loadCatalog();
       toast(
         wasLive
@@ -2379,6 +2681,25 @@
       setTab(next.dataset.tab, { noScroll: true });
     });
 
+    /* тема и размер на текста */
+    $("#font-toggle").addEventListener("click", cycleFont);
+    $("#theme-toggle").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const menu = $("#theme-menu");
+      setThemeMenuOpen(menu.hidden);
+    });
+    $("#theme-menu").addEventListener("click", (e) => {
+      const opt = e.target.closest("[data-theme-id]");
+      if (!opt) return;
+      applyTheme(opt.dataset.themeId, true);
+      setThemeMenuOpen(false);
+    });
+    document.addEventListener("click", (e) => {
+      if (!$("#theme-picker").contains(e.target)) {
+        setThemeMenuOpen(false);
+      }
+    });
+
     /* глобални действия */
     document.addEventListener("click", (e) => {
       const t = e.target;
@@ -2403,7 +2724,8 @@
       }
       if ((el = t.closest("[data-catalog-stores-toggle]"))) {
         const id = Number(el.dataset.catalogStoresToggle);
-        if (catalog.expandedChainGroups.has(id)) catalog.expandedChainGroups.delete(id);
+        if (catalog.expandedChainGroups.has(id))
+          catalog.expandedChainGroups.delete(id);
         else catalog.expandedChainGroups.add(id);
         return renderCatalog();
       }
@@ -2420,8 +2742,11 @@
         if (state.tab === "history") drawHistory();
         return;
       }
+      if (t.closest("[data-diagnose-excluded]"))
+        return diagnoseExcludedChains();
       if (t.closest("[data-retry]")) return refresh();
-      if (t.closest("[data-retry-catalog]")) return loadCatalog();      if (t.closest("[data-retry-deals]")) return loadDeals();
+      if (t.closest("[data-retry-catalog]")) return loadCatalog();
+      if (t.closest("[data-retry-deals]")) return loadDeals();
       if ((el = t.closest("[data-remove-cat]")))
         return removeItem(Number(el.dataset.removeCat));
       if (t.closest("[data-focus-search]")) return focusSearch();
@@ -2432,7 +2757,8 @@
     });
 
     /* кошница */
-    $("#basket-items").addEventListener("click", (e) => {
+    const basketListEl = $("#basket-items");
+    basketListEl.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-act]");
       if (!btn) return;
       const id = Number(btn.closest("[data-cat]").dataset.cat);
@@ -2440,17 +2766,122 @@
       else if (btn.dataset.act === "dec") changeQty(id, -1);
       else removeItem(id);
     });
+    basketListEl.addEventListener("focusin", (e) => {
+      const inp = e.target.closest("[data-qty-input]");
+      if (!inp) return;
+      inp.dataset.prev = inp.value;
+      inp.select();
+    });
+    basketListEl.addEventListener("mouseup", (e) => {
+      const inp = e.target.closest("[data-qty-input]");
+      if (
+        inp &&
+        document.activeElement === inp &&
+        inp.selectionStart === 0 &&
+        inp.selectionEnd === inp.value.length
+      ) {
+        e.preventDefault();
+      }
+    });
+    basketListEl.addEventListener("input", (e) => {
+      const inp = e.target.closest("[data-qty-input]");
+      if (!inp) return;
+      const digits = inp.value.replace(/\D+/g, "").slice(0, 2);
+      if (inp.value !== digits) inp.value = digits;
+      if (!digits) return;
+      const n = parseInt(digits, 10);
+      if (n >= 1 && n <= 99) {
+        const id = Number(inp.closest("[data-cat]").dataset.cat);
+        setQty(id, n, { live: true });
+      }
+    });
+    basketListEl.addEventListener("keydown", (e) => {
+      const inp = e.target.closest("[data-qty-input]");
+      if (!inp) return;
+      const id = Number(inp.closest("[data-cat]").dataset.cat);
+      if (e.key === "Enter") {
+        e.preventDefault();
+        inp.blur();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (inp.dataset.prev) {
+          inp.value = inp.dataset.prev;
+          setQty(id, inp.dataset.prev, { live: true });
+        }
+        inp.blur();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const next = clamp((parseInt(inp.value, 10) || 0) + 1, 1, 99);
+        inp.value = String(next);
+        setQty(id, next, { live: true });
+        inp.select();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = clamp((parseInt(inp.value, 10) || 2) - 1, 1, 99);
+        inp.value = String(next);
+        setQty(id, next, { live: true });
+        inp.select();
+      }
+    });
+    basketListEl.addEventListener("focusout", (e) => {
+      const inp = e.target.closest("[data-qty-input]");
+      if (!inp) return;
+      const li = inp.closest("[data-cat]");
+      if (!li) return;
+      const id = Number(li.dataset.cat);
+      const it = state.items.find((i) => i.category_id === id);
+      if (!it) return;
+      const digits = inp.value.replace(/\D+/g, "");
+      if (!digits) {
+        inp.value = String(it.qty);
+        return;
+      }
+      const n = parseInt(digits, 10);
+      if (n === 0) {
+        removeItem(id);
+        return;
+      }
+      const clamped = clamp(n, 1, 99);
+      inp.value = String(clamped);
+      if (it.qty !== clamped) {
+        setQty(id, clamped, { warnMax: true });
+      }
+    });
     $("#promo-toggle").addEventListener("change", (e) => {
       state.include_promos = e.target.checked;
       saveState();
       scheduleRefresh(0);
     });
-    $("#budget-input").addEventListener("input", (e) => {
-      const n = parseFloat(String(e.target.value).replace(",", "."));
-      state.budget = n > 0 ? n : null;
+    let lastBudgetClampToast = 0;
+    const budgetInput = $("#budget-input");
+    budgetInput.addEventListener("keydown", (e) => {
+      if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+    });
+    budgetInput.addEventListener("input", (e) => {
+      const raw = String(e.target.value || "")
+        .trim()
+        .replace(",", ".");
+      const num = raw ? Number(raw) : NaN;
+      const exceeded =
+        raw !== "" && (!Number.isFinite(num) || num > MAX_BUDGET);
+      if (exceeded) {
+        state.budget = MAX_BUDGET;
+        e.target.value = String(MAX_BUDGET);
+        const now = Date.now();
+        if (now - lastBudgetClampToast > 2500) {
+          lastBudgetClampToast = now;
+          toast(`Максималният бюджет е ${eur(MAX_BUDGET)}`, { type: "warn" });
+        }
+      } else {
+        state.budget = cleanBudget(raw);
+      }
       saveState();
       renderBudget();
-      if (rt.view) renderCompare();
+      if (rt.view) $("#hero").innerHTML = heroHTML(rt.view);
+    });
+    budgetInput.addEventListener("blur", (e) => {
+      e.target.value = state.budget ? String(state.budget) : "";
     });
     $("#reset-basket-btn").addEventListener("click", clearBasket);
     $("#share-basket").addEventListener("click", shareBasket);
@@ -2470,14 +2901,8 @@
     };
     if (mobileMQ.addEventListener) mobileMQ.addEventListener("change", onMq);
 
-    /* тема и статус */
-    $("#theme-toggle").addEventListener("click", cycleTheme);
+    /* статус */
     $("#api-status").addEventListener("click", reconnect);
-    if (darkMQ && darkMQ.addEventListener)
-      darkMQ.addEventListener(
-        "change",
-        () => themeMode === "system" && applyTheme(),
-      );
 
     /* сравнение */
     $("#rank-seg").addEventListener("click", (e) => {
@@ -2487,6 +2912,11 @@
       renderCompare();
     });
     $("#chain-filter").addEventListener("click", (e) => {
+      if (e.target.closest("#toggle-excluded-chains")) {
+        rt.excludedOpen = !rt.excludedOpen;
+        renderChainFilter();
+        return;
+      }
       const b = e.target.closest("[data-chain]");
       if (!b || b.disabled) return;
       const name = b.dataset.chain;
@@ -2505,6 +2935,12 @@
       state.excluded_chains = Array.from(ex);
       saveState();
       renderAll();
+      loadTrend();
+    });
+    $("#trend-card").addEventListener("change", (e) => {
+      const sel = e.target.closest("#trend-chain-select");
+      if (!sel) return;
+      rt.trendChain = sel.value;
       loadTrend();
     });
     $("#store-results").addEventListener(
@@ -2619,6 +3055,7 @@
       );
       renderCatalog();
     });
+
     /* история */
     $("#h-category").addEventListener("change", (e) => {
       rt.history.focus = null;
@@ -2631,6 +3068,7 @@
       if (rt.history.focus && rt.history.focus.chain_name !== b.dataset.hchain)
         rt.history.focus = null;
       rt.history.chain = b.dataset.hchain;
+      rt.history.view = "single";
       drawHistory();
     });
     $("#h-range").addEventListener("click", (e) => {
@@ -2711,6 +3149,7 @@
         e.preventDefault();
         focusSearch();
       } else if (e.key === "Escape") {
+        setThemeMenuOpen(false);
         closeDrawer();
       }
     });
@@ -2749,12 +3188,12 @@
   /* ───────────────────────── старт ───────────────────────── */
   async function boot() {
     hydrateIcons(document);
-    applyTheme();
+    applyTheme(currentTheme, false);
+    applyFont(currentFont, false);
     bindEvents();
     setTab(state.tab, { noScroll: true });
     $("#hero").innerHTML = `<div class="skel skel-hero"></div>`;
 
-    // 1) опит за връзка с API-то, иначе демо
     const live = await connect();
     if (!live) SB.useDemo(false);
     applyHashState();
