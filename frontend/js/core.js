@@ -10,7 +10,7 @@
   const API = String(
     window.SMARTBASKET_API_BASE || "http://localhost:8000/api/v1",
   ).replace(/\/$/, "");
-  const REQUEST_TIMEOUT = 6000;
+  const REQUEST_TIMEOUT = 15000;
   const STORAGE_KEY = "smartbasket_state_v3";
   const LEGACY_KEYS = ["smartbasket_state_v2", "smartbasket_state_v1"];
   const DAY = 86400000;
@@ -1087,7 +1087,9 @@
       if (timer) clearTimeout(timer);
     }
   }
-  const isOutage = (e) => !e || e.status == null || e.status >= 500;
+  const isTimeout = (e) => !!(e && e.name === "AbortError");
+  const isOutage = (e) =>
+    !e || (!isTimeout(e) && (e.status == null || e.status >= 500));
 
   function buildPayload() {
     return {
@@ -1153,7 +1155,7 @@
 
   async function connect() {
     try {
-      const raw = await http("/meta/init", { timeout: 4000 });
+      const raw = await http("/meta/init", { timeout: 12000 });
       const meta = normMeta(raw);
       if (!meta.categories.length || !meta.settlements.length)
         throw new Error("Празен отговор от /meta/init");
@@ -1175,8 +1177,14 @@
           return await http("/basket/optimize", {
             method: "POST",
             body: buildPayload(),
+            timeout: 15000,
           });
         } catch (e) {
+          if (isTimeout(e)) {
+            throw new Error(
+              "Сървърът отговаря по-бавно от очакваното. Опитай отново.",
+            );
+          }
           if (!isOutage(e)) throw e;
           goOffline(e);
         }
@@ -1195,10 +1203,15 @@
             q.set(k, v === true ? "true" : String(v));
           });
           const rows = await http(`/products?${q.toString()}`, {
-            timeout: 20000,
+            timeout: 25000,
           });
           return rows.map(normProduct);
         } catch (e) {
+          if (isTimeout(e)) {
+            throw new Error(
+              "Зареждането на продуктите отне твърде дълго. Опитай отново.",
+            );
+          }
           if (!isOutage(e)) throw e;
           goOffline(e);
         }
@@ -1211,12 +1224,18 @@
         try {
           const raw = await http(
             `/products/${encodeURIComponent(productId)}/history?ekatte_code=${encodeURIComponent(state.ekatte_code)}`,
+            { timeout: 15000 },
           );
           return normHistory(raw);
         } catch (e) {
           if (e && e.status === 404) return null;
-          if (!isOutage(e)) throw e;
-          goOffline(e);
+          // Бавна или неуспешна заявка за история не трябва да изключва целия Live режим
+          console.warn(
+            "[SmartBasket] Историята не се зареди за продукт",
+            productId,
+            e && e.message,
+          );
+          throw e;
         }
       }
       return normHistory(DEMO.history(productId, state.ekatte_code));

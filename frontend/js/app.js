@@ -781,8 +781,8 @@
     renderTrend();
 
     if (effectiveMode === "market") {
-      // Вземаме историята за продуктите от първите до 6 видими вериги за пазарно средно
-      const sampleRankings = v.rk.slice(0, 6);
+      // Вземаме историята за продуктите от първите до 3 видими вериги (пазим връзките към БД)
+      const sampleRankings = v.rk.slice(0, 3);
       const uniqueIds = Array.from(
         new Set(
           sampleRankings.flatMap((r) =>
@@ -790,7 +790,7 @@
           ),
         ),
       );
-      const hs = await mapLimit(uniqueIds, 6, (pid) => getHistory(pid));
+      const hs = await mapLimit(uniqueIds, 2, (pid) => getHistory(pid));
       if (token !== rt.trendToken) return;
       const histByProd = new Map();
       uniqueIds.forEach((pid, i) => {
@@ -800,7 +800,7 @@
     } else {
       const target = v.rk.find((r) => r.chain_name === effectiveMode) || v.best;
       const items = target.matched_items;
-      const hs = await mapLimit(items, 5, (it) => getHistory(it.product_id));
+      const hs = await mapLimit(items, 3, (it) => getHistory(it.product_id));
       if (token !== rt.trendToken) return;
       rt.trend = computeTrend(items, hs, target.chain_name);
     }
