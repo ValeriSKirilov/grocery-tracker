@@ -134,7 +134,9 @@ def parse_and_clean_csv(
         if promo_price == 0:
             promo_price = None
 
-        if promo_price and promo_price >= regular_price:
+        if promo_price is not None and (
+            promo_price <= 0 or promo_price >= regular_price
+        ):
             promo_price = None
 
         if (

@@ -1,7 +1,7 @@
 from datetime import date as DateType
 from decimal import Decimal
 
-from backend.database import Base
+from database import Base
 from sqlalchemy import (
     Date,
     ForeignKey,
